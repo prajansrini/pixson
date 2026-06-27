@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Pixson — Convert any file to compact text data and reconstruct it back. Images, PDFs, audio, documents and more." />
+  <title>Pixson — Universal File ↔ Text Encoder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body data-theme="dark">
+  <div class="bg-particles" id="bgParticles"></div>
+
+  <header class="header">
+    <div class="header-top">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+            <rect x="2" y="2" width="12" height="12" rx="2" fill="#3b82f6"/>
+            <rect x="18" y="2" width="12" height="12" rx="2" fill="#60a5fa"/>
+            <rect x="2" y="18" width="12" height="12" rx="2" fill="#2563eb"/>
+            <rect x="18" y="18" width="12" height="12" rx="2" fill="#38bdf8"/>
+          </svg>
+        </div>
+        <h1 class="logo-text">Pixson</h1>
+      </div>
+      <button class="theme-toggle" id="themeToggle" title="Toggle light/dark theme">
+        <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+    <p class="tagline">Encode any file into compact text — images, documents, audio & more</p>
+  </header>
+
+  <nav class="mode-tabs">
+    <button class="tab active" id="tabImg2Json">Encode</button>
+    <button class="tab" id="tabJson2Img">Decode</button>
+    <div class="tab-indicator" id="tabIndicator"></div>
+  </nav>
+
+  <main class="main-content">
+    <!-- ENCODE -->
+    <section class="mode-panel active" id="panelImg2Json">
+      <div class="upload-zone" id="imgDropZone">
+        <div class="upload-zone-inner">
+          <div class="upload-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <h2 class="upload-title">Drop any file here</h2>
+          <p class="upload-subtitle">or click to browse · Images, PDFs, DOCX, MP3, CSV, and any other file</p>
+          <p class="upload-hint">Paste images from clipboard (Ctrl+V) · Multiple files supported</p>
+          <input type="file" id="imgFileInput" multiple hidden />
+        </div>
+      </div>
+      <div class="image-queue" id="imageQueue"></div>
+    </section>
+
+    <!-- DECODE -->
+    <section class="mode-panel" id="panelJson2Img">
+      <div class="upload-zone" id="jsonDropZone">
+        <div class="upload-zone-inner">
+          <div class="upload-icon json-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          </div>
+          <h2 class="upload-title">Drop encoded files here</h2>
+          <p class="upload-subtitle">or click to browse · JSON, .json.gz, .pxn files supported</p>
+          <input type="file" id="jsonFileInput" multiple hidden />
+        </div>
+      </div>
+      <div class="json-paste-area">
+        <div class="card-header">
+          <h3>Or paste encoded data</h3>
+          <button class="btn btn-sm btn-ghost" id="addPastedJson">Add to queue</button>
+        </div>
+        <textarea class="json-textarea" id="jsonTextInput" placeholder='Paste Pixson JSON or Base64 data here and click "Add to queue"'></textarea>
+      </div>
+      <div class="json-queue" id="jsonQueue"></div>
+    </section>
+  </main>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <footer class="footer"><p>Pixson — 100% client-side. Your files never leave your browser.</p></footer>
+  <script src="app.js"></script>
+</body>
+</html>
