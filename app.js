@@ -10,6 +10,18 @@ const jsonDrop=$('#jsonDropZone'),jsonInput=$('#jsonFileInput'),jsonText=$('#jso
 const addPastedBtn=$('#addPastedJson'),jsonQueue=$('#jsonQueue'),pasteOverlay=$('#pasteOverlay');
 const toasts=$('#toastContainer'),themeBtn=$('#themeToggle');
 
+const imgModal = $('#imageModal');
+const imgModalImg = $('#imageModalImg');
+if(imgModal) {
+  imgModal.onclick = (e) => { if (e.target !== imgModalImg) imgModal.classList.remove('active'); };
+  imgModal.querySelector('.image-modal-close').onclick = () => imgModal.classList.remove('active');
+}
+function openImagePreview(src) {
+  if(!imgModal || !src) return;
+  imgModalImg.src = src;
+  imgModal.classList.add('active');
+}
+
 let imgCtr=0, jsonCtr=0;
 
 // ─── Particles ──────────────────────────────────────────────
@@ -41,6 +53,12 @@ function switchTab(m){
   tabInd.classList.toggle('right',!isI);
 }
 tabI.onclick=()=>switchTab('img');tabJ.onclick=()=>switchTab('json');
+document.addEventListener('keydown', e => {
+  if (['INPUT','TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+  const k = e.key.toLowerCase();
+  if (k === 'e') switchTab('img');
+  else if (k === 'd') switchTab('json');
+});
 
 // ─── Helpers ────────────────────────────────────────────────
 function fmtSz(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(2)+' MB';}
@@ -136,10 +154,36 @@ function createPxnBinary(w, h, deflatedBytes, encType) {
   u8.set(deflatedBytes, 13);
   return u8;
 }
+function createGenericPxnBinary(filename, mimeType, originalSize, deflatedBytes) {
+  const enc = new TextEncoder();
+  const nameBytes = enc.encode(filename);
+  const mimeBytes = enc.encode(mimeType);
+  const buf = new ArrayBuffer(13 + 4 + 1 + nameBytes.length + 1 + mimeBytes.length + deflatedBytes.length);
+  const view = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+  u8[0]=80; u8[1]=88; u8[2]=69; u8[3]=78; // PXEN
+  view.setUint32(4, 0, true);
+  view.setUint32(8, 0, true);
+  u8[12] = 3; // Generic File
+  view.setUint32(13, originalSize, true);
+  let off = 17;
+  u8[off++] = nameBytes.length; u8.set(nameBytes, off); off += nameBytes.length;
+  u8[off++] = mimeBytes.length; u8.set(mimeBytes, off); off += mimeBytes.length;
+  u8.set(deflatedBytes, off);
+  return u8;
+}
 function parsePxnBinary(u8) {
   if (u8.length < 13 || u8[0]!==80 || u8[1]!==88 || u8[2]!==69 || u8[3]!==78) throw new Error("Invalid PXN file");
   const view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
-  return { w: view.getUint32(4, true), h: view.getUint32(8, true), type: u8[12], data: u8.slice(13) };
+  const type = u8[12];
+  if (type === 3) {
+    const originalSize = view.getUint32(13, true);
+    let off = 17;
+    const nameLen = u8[off++]; const filename = new TextDecoder().decode(u8.slice(off, off + nameLen)); off += nameLen;
+    const mimeLen = u8[off++]; const mimeType = new TextDecoder().decode(u8.slice(off, off + mimeLen)); off += mimeLen;
+    return { type, originalSize, filename, mimeType, data: u8.slice(off) };
+  }
+  return { w: view.getUint32(4, true), h: view.getUint32(8, true), type, data: u8.slice(13) };
 }
 
 function u8ToB64(u8){
@@ -148,6 +192,41 @@ function u8ToB64(u8){
   return btoa(b);
 }
 function b64ToU8(s){const b=atob(s);const u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;}
+function u8ToBase85(u8) {
+  let b = '', a = 0, c = 0;
+  for (let i = 0; i < u8.length; i++) {
+    a = (a * 256) + u8[i]; c++;
+    if (c === 4) {
+      if (a === 0) b += 'z';
+      else { let chunk = ''; for (let j = 0; j < 5; j++) { chunk = String.fromCharCode(33 + (a % 85)) + chunk; a = Math.floor(a / 85); } b += chunk; }
+      a = 0; c = 0;
+    }
+  }
+  if (c > 0) {
+    for (let i = c; i < 4; i++) a *= 256;
+    let chunk = ''; for (let j = 0; j < 5; j++) { chunk = String.fromCharCode(33 + (a % 85)) + chunk; a = Math.floor(a / 85); }
+    b += chunk.substring(0, c + 1);
+  }
+  return '<~' + b + '~>';
+}
+function base85ToU8(s) {
+  if (s.startsWith('<~')) s = s.substring(2, s.length - 2);
+  s = s.replace(/\s/g, '');
+  const u = []; let a = 0, c = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === 'z') { if (c !== 0) throw new Error("Invalid b85"); u.push(0,0,0,0); }
+    else {
+      a = (a * 85) + (s.charCodeAt(i) - 33); c++;
+      if (c === 5) { u.push((a>>>24)&255, (a>>>16)&255, (a>>>8)&255, a&255); a=0; c=0; }
+    }
+  }
+  if (c > 0) {
+    if (c === 1) throw new Error("Invalid b85 len");
+    for (let i = c; i < 5; i++) a = (a * 85) + 84;
+    for (let i = 0; i < c - 1; i++) u.push((a>>>(24-i*8))&255);
+  }
+  return new Uint8Array(u);
+}
 
 function hexDump(u8, max=512) {
   let s = '[BINARY HEX DUMP]\n\n';
@@ -494,10 +573,10 @@ function makeImgRow(id,file,imgEl,dataUrl){
       '<div class="row-actions"><button class="btn btn-sm btn-primary js-conv">Convert</button><button class="btn-remove js-rm">✕</button></div>'+
     '</div>'+
     '<div class="row-options">'+
-      '<div class="option-group"><label class="option-label">Original size</label><label class="toggle-switch"><input type="checkbox" class="js-orig"><span class="toggle-slider"></span></label></div>'+
-      '<div class="option-group"><label class="option-label">Max Dimensions</label><input type="number" class="option-input js-maxdim" value="256" min="1" max="4096"></div>'+
+      '<div class="option-group"><label class="option-label">Original size</label><label class="toggle-switch"><input type="checkbox" class="js-orig" checked><span class="toggle-slider"></span></label></div>'+
+      '<div class="option-group"><label class="option-label">Max Dimensions</label><input type="number" class="option-input js-maxdim" value="256" min="1" max="4096" disabled></div>'+
       '<div class="option-group"><label class="option-label">Encoding</label><select class="option-select js-enc">'+encOptHTML()+'</select></div>'+
-      '<div class="option-group"><label class="option-label">Container Format</label><select class="option-select js-fmt"><option value="json">JSON Text (.json)</option><option value="gz">GZipped JSON (.json.gz)</option><option value="pxn">PXN Binary (.pxn)</option></select></div>'+
+      '<div class="option-group"><label class="option-label">Container Format</label><select class="option-select js-fmt"><option value="json">JSON Text (.json)</option><option value="gz">GZipped JSON (.json.gz)</option><option value="pxsn">PXN Binary (.pxsn)</option></select></div>'+
       '<div class="option-group"><label class="option-label">Encrypt</label><label class="toggle-switch"><input type="checkbox" class="js-enc-tog"><span class="toggle-slider"></span></label></div>'+
       '<div class="option-group"><label class="option-label">Password</label><input type="password" class="option-input js-enc-pass" placeholder="Secret..." disabled></div>'+
     '</div>'+
@@ -505,8 +584,8 @@ function makeImgRow(id,file,imgEl,dataUrl){
     '<div class="row-result" id="res-'+id+'">'+
       '<div class="row-result-header"><h4>JSON Preview</h4><div class="card-actions">'+
         '<span class="badge badge-enc js-eb"></span><span class="badge badge-size js-js"></span>'+
-        '<button class="btn btn-sm btn-ghost js-cp-html" style="color:var(--cyan);border-color:var(--cyan)" title="Copy <img> tag">HTML</button>'+
-        '<button class="btn btn-sm btn-ghost js-cp-css" style="color:var(--cyan);border-color:var(--cyan)" title="Copy background-image">CSS</button>'+
+        '<button class="btn btn-sm btn-outline-cyan js-cp-html" title="Copy <img> tag">HTML</button>'+
+        '<button class="btn btn-sm btn-outline-cyan js-cp-css" title="Copy background-image">CSS</button>'+
         '<button class="btn btn-sm btn-ghost js-cp">Copy</button><button class="btn btn-sm btn-accent js-dl">Download</button></div></div>'+
       '<pre class="json-preview js-jp"></pre>'+
     '</div>';
@@ -520,6 +599,12 @@ function makeImgRow(id,file,imgEl,dataUrl){
   row.querySelector('.js-rm').onclick=()=>{row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);};
   row.querySelector('.js-conv').onclick=()=>convertImgRow(row,id);
   showProgress(row);setTimeout(()=>hideProgress(row),300);
+
+  const thumbImg = row.querySelector('.row-thumb img');
+  if (thumbImg) {
+    thumbImg.style.cursor = 'zoom-in';
+    thumbImg.onclick = () => openImagePreview(thumbImg.src);
+  }
   
   row.querySelector('.js-cp').onclick=async()=>{
     if(!row._dlBlob)return;
@@ -612,12 +697,13 @@ function makeGenericRow(id,file,u8){
         '<div class="row-meta"><span class="badge badge-enc">'+file.name.split('.').pop().toUpperCase()+'</span><span class="badge badge-size">'+fmtSz(file.size)+'</span></div></div>'+
       '<div class="row-actions"><button class="btn btn-sm btn-primary js-conv">Encode</button><button class="btn-remove js-rm">✕</button></div>'+
     '</div>'+
-    '<div class="generic-preview-wrap" style="border-top:none;border-bottom:1px solid var(--border)">'+previewHtml+'</div>'+
-    '<div class="row-options">'+
-      '<div class="option-group"><label class="option-label">Container</label><select class="option-select js-fmt"><option value="json">JSON Text (.json)</option><option value="gz">GZipped JSON (.json.gz)</option></select></div>'+
+    '<div class="row-options" style="border-bottom:1px solid var(--border)">'+
+      '<div class="option-group"><label class="option-label">Encoding</label><select class="option-select js-enc"><option value="base64">Base64</option><option value="base85">Base85 (Smaller)</option></select></div>'+
+      '<div class="option-group"><label class="option-label">Container</label><select class="option-select js-fmt"><option value="json">JSON Text (.json)</option><option value="gz">GZipped JSON (.json.gz)</option><option value="pxsn">PXN Binary (.pxsn)</option></select></div>'+
       '<div class="option-group"><label class="option-label">Encrypt</label><label class="toggle-switch"><input type="checkbox" class="js-enc-tog"><span class="toggle-slider"></span></label></div>'+
       '<div class="option-group"><label class="option-label">Password</label><input type="password" class="option-input js-enc-pass" placeholder="Secret..." disabled></div>'+
     '</div>'+
+    '<div class="generic-preview-wrap" style="border-top:none">'+previewHtml+'</div>'+
     '<div class="row-progress"><div class="row-progress-bar"></div></div>'+
     '<div class="row-result" id="res-'+id+'">'+
       '<div class="row-result-header"><h4>Output Preview</h4><div class="card-actions">'+
@@ -650,16 +736,28 @@ function makeGenericRow(id,file,u8){
 
 async function convertGenericRow(row,id){
   const outFmt=row.querySelector('.js-fmt').value;
+  const enc=row.querySelector('.js-enc').value;
   const btn=row.querySelector('.js-conv');btn.disabled=true;btn.textContent='Encoding…';
   showProgress(row);
   await sleep(10);
   const compressed=await compressBytes(row._u8);
-  const b64=u8ToB64(compressed);
-  const obj={format:'pixson-file-v1',filename:row._fn,mimeType:row._mime,originalSize:row._u8.length,encoding:'gzip+base64',data:b64};
+  
+  let encData, encLabel;
+  if(enc==='base85') { encData=u8ToBase85(compressed); encLabel='gzip+base85'; }
+  else { encData=u8ToB64(compressed); encLabel='gzip+base64'; }
+  
+  const obj={format:'pixson-file-v1',filename:row._fn,mimeType:row._mime,originalSize:row._u8.length,encoding:encLabel,data:encData};
   row._jd=obj;
   const jsonStr=JSON.stringify(obj,null,2);
   let fileBlob,fileExt,displaySize,previewStr;
-  if(outFmt==='gz'){
+  
+  if (outFmt === 'pxsn') {
+    const bin = createGenericPxnBinary(row._fn, row._mime, row._u8.length, compressed);
+    fileBlob = new Blob([bin], {type: 'application/octet-stream'});
+    fileExt = 'pxsn';
+    displaySize = bin.length;
+    previewStr = hexDump(bin);
+  } else if(outFmt==='gz'){
     const gzBytes=await gzipJSON(jsonStr);
     fileBlob=new Blob([gzBytes],{type:'application/gzip'});fileExt='json.gz';
     displaySize=gzBytes.length;previewStr=hexDump(gzBytes);
@@ -698,7 +796,7 @@ async function convertImgRow(row,id){
   let enc=row.querySelector('.js-enc').value;
   const outFmt=row.querySelector('.js-fmt').value;
   
-  if (outFmt === 'pxn' && enc !== 'pixenultra') enc = 'pixen';
+  if (outFmt === 'pxsn' && enc !== 'pixenultra') enc = 'pixen';
   
   const btn=row.querySelector('.js-conv');btn.disabled=true;btn.textContent='Converting…';
   showProgress(row);
@@ -729,11 +827,11 @@ async function convertImgRow(row,id){
   
   let fileBlob, fileExt, displaySize, displayEnc = enc, previewStr;
 
-  if (outFmt === 'pxn') {
+  if (outFmt === 'pxsn') {
     const pxnType = enc === 'pixenultra' ? 2 : 1;
     const bin = createPxnBinary(cw, ch, b64ToU8(obj.data), pxnType);
     fileBlob = new Blob([bin], {type: 'application/octet-stream'});
-    fileExt = 'pxn';
+    fileExt = 'pxsn';
     displaySize = bin.length;
     displayEnc = 'PXN Binary';
     previewStr = hexDump(bin);
@@ -809,6 +907,11 @@ async function processDataBuffer(u8, name, id, sizeOverride) {
   } catch(e) {}
   if(u8.length>=4 && u8[0]===80 && u8[1]===88 && u8[2]===69 && u8[3]===78){
     const parsed = parsePxnBinary(u8);
+    if (parsed.type === 3) {
+      const obj = { format: 'pixson-file-v1', filename: parsed.filename, mimeType: parsed.mimeType, originalSize: parsed.originalSize, encoding: 'PXN Binary (Deflate)', _binaryData: parsed.data };
+      makeGenericDecodeRow(id, name, sizeStr, obj);
+      return;
+    }
     const encType = parsed.type === 2 ? 'pixenultra' : 'pixen';
     const obj = { format:'pixen-v1', width:parsed.w, height:parsed.h, encoding:encType, _binaryData:parsed.data };
     makeDataRow(id, name, sizeStr, obj, 'PXN Binary ('+encType+')');
@@ -876,6 +979,18 @@ function makeDataRow(id,name,sizeStr,obj,encBadge){
 
   jsonQueue.appendChild(row);
   row._obj=obj;row._name=name;row._done=false;
+
+  const thumbCvs = row.querySelector('#jthumb-'+id+' canvas');
+  const fullCvs = row.querySelector('#jcvs-'+id);
+  const setupPreview = (cvsEl) => {
+    cvsEl.style.cursor = 'zoom-in';
+    cvsEl.onclick = () => {
+      if (!row._done) return;
+      openImagePreview(fullCvs.toDataURL());
+    };
+  };
+  if(thumbCvs) setupPreview(thumbCvs);
+  if(fullCvs) setupPreview(fullCvs);
 
   row.querySelector('.js-rm').onclick=()=>{row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);};
   row.querySelector('.js-recon').onclick=()=>reconRow(row,id);
@@ -954,7 +1069,14 @@ function makeGenericDecodeRow(id,name,sizeStr,obj){
     showProgress(row);
     try{
       await sleep(10);
-      const compressed=b64ToU8(obj.data);
+      let compressed;
+      if (obj._binaryData) {
+        compressed = obj._binaryData;
+      } else if (obj.encoding === 'gzip+base85') {
+        compressed = base85ToU8(obj.data);
+      } else {
+        compressed = b64ToU8(obj.data);
+      }
       const raw=await decompressBytes(compressed);
       const blob=new Blob([raw],{type:obj.mimeType||'application/octet-stream'});
       row._blob=blob;row._done=true;
@@ -1154,6 +1276,37 @@ $('#btnProcessAllDecode').onclick = async () => {
   btn.disabled=false; btn.textContent='Decode All';
 };
 
+// ─── Interactive Logo Rotation ──────────────────────────────
+const logoIcon = document.querySelector('.logo-icon');
+if (logoIcon) {
+  let logoRot = 0, logoSpeed = 0.3, isDraggingLogo = false, lastX = 0;
+  const tick = () => {
+    if (!isDraggingLogo) {
+      logoRot += logoSpeed;
+      logoSpeed += (0.3 - logoSpeed) * 0.005; // Less friction so it spins much longer
+    }
+    logoIcon.style.transform = `rotate(${logoRot}deg)`;
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  
+  logoIcon.onpointerdown = e => {
+    isDraggingLogo = true; lastX = e.clientX;
+    logoIcon.setPointerCapture(e.pointerId);
+  };
+  logoIcon.onpointermove = e => {
+    if (!isDraggingLogo) return;
+    const dx = e.clientX - lastX;
+    logoRot += dx; 
+    logoSpeed = (logoSpeed * 0.4) + (dx * 0.6); // Smoother momentum capture
+    logoIcon.style.transform = `rotate(${logoRot}deg)`;
+    lastX = e.clientX;
+  };
+  logoIcon.onpointerup = e => {
+    isDraggingLogo = false;
+    logoIcon.releasePointerCapture(e.pointerId);
+  };
+}
 $('#btnDownloadAllEncode').onclick = async () => {
   const rows = Array.from(imgQueue.querySelectorAll('.row-card')).filter(r => r._dlBlob);
   if(!rows.length) return;
@@ -1175,7 +1328,7 @@ $('#btnDownloadAllDecode').onclick = async () => {
       const fmt=row.querySelector('.js-outfmt').value, mime=fmt==='jpeg'?'image/jpeg':fmt==='webp'?'image/webp':'image/png';
       const ext=fmt==='jpeg'?'jpg':fmt;
       const blob=await new Promise(r => cvs.toBlob(r, mime, 1.0)), buf=await blob.arrayBuffer();
-      u8=new Uint8Array(buf); name=(row._name||'reconstructed').replace(/\.(json|pxn|gz)$/i,'')+'.'+ext;
+      u8=new Uint8Array(buf); name=(row._name||'reconstructed').replace(/\.(json|pxsn|gz)$/i,'')+'.'+ext;
     }
     files.push({name, u8});
   }

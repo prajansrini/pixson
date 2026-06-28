@@ -73,7 +73,7 @@
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
           </div>
           <h2 class="upload-title">Drop encoded files here</h2>
-          <p class="upload-subtitle">or click to browse · JSON, .json.gz, .pxn files supported</p>
+          <p class="upload-subtitle">or click to browse · JSON, .json.gz, .pxsn files supported</p>
           <input type="file" id="jsonFileInput" multiple hidden />
         </div>
       </div>
@@ -99,6 +99,10 @@
 
   <div class="toast-container" id="toastContainer"></div>
   <footer class="footer"><p>Pixson — 100% client-side. Your files never leave your browser.</p></footer>
+  <div id="imageModal" class="image-modal">
+    <button class="image-modal-close">✕</button>
+    <img id="imageModalImg" src="" alt="Preview">
+  </div>
   <script src="app.js"></script>
 </body>
 </html>

@@ -17,7 +17,7 @@
 - [Pixen Ultra Encoding — Deep Dive](#pixen-ultra-encoding--deep-dive)
 - [Generic File Encoding](#generic-file-encoding)
 - [JSON Output Schema](#json-output-schema)
-- [PXN Binary Format](#pxn-binary-format)
+- [PXN Binary Format](#pxsn-binary-format)
 - [Architecture & Tech Stack](#architecture--tech-stack)
 - [UI / UX](#ui--ux)
 - [Performance & Safety](#performance--safety)
@@ -121,7 +121,7 @@ No build step. No install. Just serve static files.
 |--------|-----------|
 | JSON Text (`.json`) | Standard JSON parse |
 | GZipped JSON (`.json.gz`) | Magic bytes `1F 8B` |
-| PXN Binary (`.pxn`) | Magic bytes `PXEN` (50 58 45 4E) |
+| PXN Binary (`.pxsn`) | Magic bytes `PXEN` (50 58 45 4E) |
 | Base64 String (pasted) | Auto-detected when text doesn't start with `{` or `[` |
 
 ---
@@ -152,7 +152,7 @@ No build step. No install. Just serve static files.
 |-----------|-----------|------|----------|
 | **JSON Text** | `.json` | Text | Copy-paste workflows, readability |
 | **GZipped JSON** | `.json.gz` | Binary | Smallest JSON-based output |
-| **PXN Binary** | `.pxn` | Binary | Maximum compression — strips all JSON overhead |
+| **PXN Binary** | `.pxsn` | Binary | Maximum compression — strips all JSON overhead |
 
 ---
 
