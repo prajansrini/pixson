@@ -27,7 +27,59 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+function getImgRowState(r){
+  if(!r)return'';
+  return JSON.stringify({
+    o:r.querySelector('.js-orig').checked,
+    m:r.querySelector('.js-maxdim').value,
+    e:r.querySelector('.js-enc').value,
+    f:r.querySelector('.js-fmt').value,
+    st:r.querySelector('.js-stego-tog').checked,
+    sx:r._stegoPayload||r.querySelector('.js-stego-txt').value,
+    et:r.querySelector('.js-enc-tog').checked,
+    ep:r.querySelector('.js-enc-pass').value
+  });
+}
+function getGenericRowState(r){
+  if(!r)return'';
+  return JSON.stringify({
+    e:r.querySelector('.js-enc').value,
+    f:r.querySelector('.js-fmt').value,
+    et:r.querySelector('.js-enc-tog').checked,
+    ep:r.querySelector('.js-enc-pass').value
+  });
+}
+
 let imgCtr=0, jsonCtr=0;
+
+// ─── IndexedDB Workspace Auto-Save ──────────────────────────
+let db;
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('PixsonWorkspaceDB', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => { db = request.result; resolve(db); };
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('encodeFiles')) db.createObjectStore('encodeFiles', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('decodeFiles')) db.createObjectStore('decodeFiles', { keyPath: 'id' });
+    };
+  });
+}
+function saveFileToDB(storeName, id, file) { if (db) db.transaction(storeName, 'readwrite').objectStore(storeName).put({ id, file, name: file.name, type: file.type, size: file.size }); }
+function removeFileFromDB(storeName, id) { if (db) db.transaction(storeName, 'readwrite').objectStore(storeName).delete(id); }
+function loadWorkspace() {
+  if (!db) return;
+  const txEnc = db.transaction('encodeFiles', 'readonly');
+  txEnc.objectStore('encodeFiles').getAll().onsuccess = (e) => {
+    for (const rec of e.target.result) { imgCtr = Math.max(imgCtr, rec.id); if (rec.type.startsWith('image/')) addImg(rec.file, true, rec.id); else addGenericFile(rec.file, true, rec.id); }
+  };
+  const txDec = db.transaction('decodeFiles', 'readonly');
+  txDec.objectStore('decodeFiles').getAll().onsuccess = (e) => {
+    for (const rec of e.target.result) { jsonCtr = Math.max(jsonCtr, rec.id); addDataFile(rec.file, true, rec.id); }
+  };
+}
+initDB().then(loadWorkspace).catch(e => console.warn('Workspace auto-save unavailable:', e));
 
 // ─── Particles ──────────────────────────────────────────────
 (function(){
@@ -629,15 +681,19 @@ function addFiles(files){
   }
 }
 
-function addImg(file){
-  const id=++imgCtr,reader=new FileReader();
+function addImg(file, isRestore = false, restoreId = null){
+  const id=restoreId || ++imgCtr;
+  if(!isRestore) saveFileToDB('encodeFiles', id, file);
+  const reader=new FileReader();
   reader.onload=e=>{const img=new Image();img.onload=()=>makeImgRow(id,file,img,e.target.result);img.src=e.target.result;};
   reader.readAsDataURL(file);
 }
 
 function addImgBlob(blob){
-  const id=++imgCtr,reader=new FileReader();
-  reader.onload=e=>{const img=new Image();img.onload=()=>makeImgRow(id,{name:'pasted-'+id+'.png',size:blob.size,type:blob.type},img,e.target.result);img.src=e.target.result;};
+  const id=++imgCtr, file=new File([blob], 'pasted-'+id+'.png', {type: blob.type});
+  saveFileToDB('encodeFiles', id, file);
+  const reader=new FileReader();
+  reader.onload=e=>{const img=new Image();img.onload=()=>makeImgRow(id,{name:file.name,size:file.size,type:file.type},img,e.target.result);img.src=e.target.result;};
   reader.readAsDataURL(blob);
 }
 
@@ -649,7 +705,7 @@ function makeImgRow(id,file,imgEl,dataUrl){
       '<div class="row-thumb"><img src="'+dataUrl+'" alt=""></div>'+
       '<div class="row-info"><div class="row-name" title="'+file.name+'">'+file.name+'</div>'+
         '<div class="row-meta"><span class="badge badge-dim">'+w+' × '+h+'</span><span class="badge badge-size">'+fmtSz(file.size)+'</span></div></div>'+
-      '<div class="row-actions"><button class="btn btn-sm btn-primary js-conv">Convert</button><button class="btn-remove js-rm">✕</button></div>'+
+      '<div class="row-actions"><button class="btn btn-sm btn-primary js-conv">Encode</button><button class="btn-remove js-rm">✕</button></div>'+
     '</div>'+
     '<div class="row-options">'+
       '<div class="option-group"><label class="option-label">Original size</label><label class="toggle-switch"><input type="checkbox" class="js-orig" checked><span class="toggle-slider"></span></label></div>'+
@@ -657,7 +713,7 @@ function makeImgRow(id,file,imgEl,dataUrl){
       '<div class="option-group"><label class="option-label">Encoding</label><select class="option-select js-enc">'+encOptHTML()+'</select></div>'+
       '<div class="option-group"><label class="option-label">Container Format</label><select class="option-select js-fmt"><option value="json">JSON Text (.json)</option><option value="gz">GZipped JSON (.json.gz)</option><option value="pxsn">PXN Binary (.pxsn)</option></select></div>'+
       '<div class="option-group"><label class="option-label">Steganography</label><label class="toggle-switch"><input type="checkbox" class="js-stego-tog"><span class="toggle-slider"></span></label></div>'+
-      '<div class="option-group"><label class="option-label">Secret Text</label><div style="display:flex;gap:4px;"><input type="text" class="option-input js-stego-txt" placeholder="Type here..." disabled style="width: 100px;"><button class="btn btn-sm btn-ghost js-stego-file-btn" disabled title="Upload Text File" style="padding:0 8px;">📄</button><input type="file" accept="text/plain,.txt" class="js-stego-file" style="display:none"></div></div>'+
+      '<div class="option-group"><label class="option-label">Secret Text</label><div style="display:flex;gap:4px;"><input type="text" class="option-input js-stego-txt" placeholder="Type here..." disabled style="width:100px;"><button class="btn btn-sm btn-ghost js-stego-file-btn" disabled title="Upload Text File" style="padding:0 8px;">📄</button><input type="file" accept="text/plain,.txt" class="js-stego-file" style="display:none"></div></div>'+
       '<div class="option-group"><label class="option-label">Encrypt</label><label class="toggle-switch"><input type="checkbox" class="js-enc-tog"><span class="toggle-slider"></span></label></div>'+
       '<div class="option-group"><label class="option-label">Password</label><input type="password" class="option-input js-enc-pass" placeholder="Secret..." disabled></div>'+
     '</div>'+
@@ -701,7 +757,10 @@ function makeImgRow(id,file,imgEl,dataUrl){
     stegoFile.value='';
   };
   
-  row.querySelector('.js-rm').onclick=()=>{row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);};
+  row.querySelector('.js-rm').onclick=()=>{
+    removeFileFromDB('encodeFiles', id);
+    row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);
+  };
   row.querySelector('.js-conv').onclick=()=>convertImgRow(row,id);
   showProgress(row);setTimeout(()=>hideProgress(row),300);
 
@@ -718,6 +777,10 @@ function makeImgRow(id,file,imgEl,dataUrl){
   };
   
   row.querySelector('.js-cp').onclick=async()=>{
+    if(row._lastState && row._lastState !== getImgRowState(row)){
+      toast('Auto-compiling new settings...','info');
+      await convertImgRow(row,id);
+    }
     if(!row._dlBlob)return;
     try{
       let text;
@@ -744,6 +807,10 @@ function makeImgRow(id,file,imgEl,dataUrl){
     return u8ToB64(new Uint8Array(buf));
   };
   row.querySelector('.js-cp-html').onclick = async () => {
+    if(row._lastState && row._lastState !== getImgRowState(row)){
+      toast('Auto-compiling new settings...','info');
+      await convertImgRow(row,id);
+    }
     try {
       const b64 = await getWebpB64();
       const html = `<img src="data:image/webp;base64,${b64}" width="${row._jd.width}" height="${row._jd.height}" alt="${row._fn}">`;
@@ -752,6 +819,10 @@ function makeImgRow(id,file,imgEl,dataUrl){
     } catch (e) { toast(e.message, 'error'); }
   };
   row.querySelector('.js-cp-css').onclick = async () => {
+    if(row._lastState && row._lastState !== getImgRowState(row)){
+      toast('Auto-compiling new settings...','info');
+      await convertImgRow(row,id);
+    }
     try {
       const b64 = await getWebpB64();
       const css = `background-image: url('data:image/webp;base64,${b64}');\nbackground-size: contain;\nbackground-repeat: no-repeat;`;
@@ -760,7 +831,11 @@ function makeImgRow(id,file,imgEl,dataUrl){
     } catch (e) { toast(e.message, 'error'); }
   };
 
-  row.querySelector('.js-dl').onclick=()=>{
+  row.querySelector('.js-dl').onclick=async()=>{
+    if(row._lastState && row._lastState !== getImgRowState(row)){
+      toast('Auto-compiling new settings...','info');
+      await convertImgRow(row,id);
+    }
     if(!row._dlBlob)return;
     dlBlob(row._dlBlob, row._dlName);
     toast('Downloaded!','success');
@@ -769,13 +844,11 @@ function makeImgRow(id,file,imgEl,dataUrl){
 }
 
 // ─── Generic File Row ────────────────────────────────────────
-function addGenericFile(file){
-  const id=++imgCtr;
+function addGenericFile(file, isRestore = false, restoreId = null){
+  const id=restoreId || ++imgCtr;
+  if(!isRestore) saveFileToDB('encodeFiles', id, file);
   const reader=new FileReader();
-  reader.onload=e=>{
-    const u8=new Uint8Array(e.target.result);
-    makeGenericRow(id,file,u8);
-  };
+  reader.onload=e=>makeGenericRow(id,file,new Uint8Array(e.target.result));
   reader.readAsArrayBuffer(file);
 }
 
@@ -830,6 +903,7 @@ function makeGenericRow(id,file,u8){
   encTog.onchange=()=>{encPass.disabled=!encTog.checked;if(encTog.checked)encPass.focus();};
   
   row.querySelector('.js-rm').onclick=()=>{
+    removeFileFromDB('encodeFiles', id);
     if(row._blobUrl) URL.revokeObjectURL(row._blobUrl);
     row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';
     setTimeout(()=>row.remove(),180);
@@ -843,6 +917,10 @@ function makeGenericRow(id,file,u8){
   
   row.querySelector('.js-conv').onclick=()=>convertGenericRow(row,id);
   row.querySelector('.js-cp').onclick=async()=>{
+    if(row._lastState && row._lastState !== getGenericRowState(row)){
+      toast('Auto-compiling new settings...','info');
+      await convertGenericRow(row,id);
+    }
     if(!row._dlBlob)return;
     try{
       let text;
@@ -851,7 +929,14 @@ function makeGenericRow(id,file,u8){
       await navigator.clipboard.writeText(text);toast('Copied!','success');
     }catch{toast('Copy failed','error');}
   };
-  row.querySelector('.js-dl').onclick=()=>{if(!row._dlBlob)return;dlBlob(row._dlBlob,row._dlName);toast('Downloaded!','success');};
+  row.querySelector('.js-dl').onclick=async()=>{
+    if(row._lastState && row._lastState !== getGenericRowState(row)){
+      toast('Auto-compiling new settings...','info');
+      await convertGenericRow(row,id);
+    }
+    if(!row._dlBlob)return;
+    dlBlob(row._dlBlob,row._dlName);toast('Downloaded!','success');
+  };
   toast('Added: '+file.name,'success',1800);
 }
 
@@ -923,6 +1008,7 @@ async function convertGenericRow(row,id){
   }
 
   btn.disabled=false;btn.textContent='Encode';
+  row._lastState = getGenericRowState(row);
   if(typeof updateBulkUI==='function') updateBulkUI();
   toast(fmtSz(row._u8.length)+' → '+fmtSz(displaySize)+' ('+((displaySize/row._u8.length)*100).toFixed(0)+'%)','success');
 }
@@ -935,7 +1021,7 @@ async function convertImgRow(row,id){
   
   if (outFmt === 'pxsn' && enc !== 'pixenultra') enc = 'pixen';
   
-  const btn=row.querySelector('.js-conv');btn.disabled=true;btn.textContent='Converting…';
+  const btn=row.querySelector('.js-conv');btn.disabled=true;btn.textContent='Encoding…';
   showProgress(row);
   await sleep(10);
 
@@ -949,7 +1035,7 @@ async function convertImgRow(row,id){
   
   if (stegoTog) {
     const payloadStr = row._stegoPayload || stegoTxt;
-    if (!payloadStr) { toast('Enter Secret Text or upload a file!', 'error'); btn.disabled = false; btn.textContent = 'Convert'; hideProgress(row); return; }
+    if (!payloadStr) { toast('Enter Secret Text or upload a file!', 'error'); btn.disabled = false; btn.textContent = 'Encode'; hideProgress(row); return; }
     
     // Convert secret text to binary
     const textBytes = new TextEncoder().encode(payloadStr);
@@ -962,7 +1048,7 @@ async function convertImgRow(row,id){
     
     const imgData = ctx.getImageData(0, 0, cw, ch); const pixels = imgData.data;
     const maxBytes = Math.floor((pixels.length / 4 * 3) / 8);
-    if (finalPayload.length > maxBytes) { toast(`Text too long! Max ${fmtSz(maxBytes)} chars for this image.`, 'error'); hideProgress(row); btn.disabled = false; btn.textContent = 'Convert'; return; }
+    if (finalPayload.length > maxBytes) { toast(`Text too long! Max ${fmtSz(maxBytes)} chars for this image.`, 'error'); hideProgress(row); btn.disabled = false; btn.textContent = 'Encode'; return; }
     
     let bitIdx = 0; const totalBits = finalPayload.length * 8;
     for (let i = 0; i < pixels.length && bitIdx < totalBits; i += 4) {
@@ -990,7 +1076,7 @@ async function convertImgRow(row,id){
     res.querySelector('.js-jp').textContent=`[STEGANOGRAPHY]\nSecret message successfully embedded into ${cw}x${ch} PNG.\nOutput is a completely normal PNG image.`;
     
     const qrBtn = row.querySelector('.js-qr-btn'); if(qrBtn) qrBtn.style.display = 'none';
-    btn.disabled=false;btn.textContent='Convert';
+    btn.disabled=false;btn.textContent='Encode';
     if(typeof updateBulkUI==='function') updateBulkUI();
     toast('Secret Text Hidden!', 'success');
     return;
@@ -1040,7 +1126,7 @@ async function convertImgRow(row,id){
 
   const encTog=row.querySelector('.js-enc-tog').checked, pass=row.querySelector('.js-enc-pass').value;
   if(encTog && outFmt !== 'stego'){
-    if(!pass){toast('Enter password to encrypt','error');btn.disabled=false;btn.textContent='Convert';hideProgress(row);return;}
+    if(!pass){toast('Enter password to encrypt','error');btn.disabled=false;btn.textContent='Encode';hideProgress(row);return;}
     const buf=await fileBlob.arrayBuffer();
     const encResult=await encryptData(new Uint8Array(buf), pass);
     const envObj={format:'pixson-encrypted-v1', salt:encResult.salt, iv:encResult.iv, data:encResult.data, originalFmt:outFmt, originalName:row._fn};
@@ -1076,8 +1162,9 @@ async function convertImgRow(row,id){
     }
   }
 
-  btn.disabled=false;btn.textContent='Convert';
+  btn.disabled=false;btn.textContent='Encode';
   hideProgress(row);
+  row._lastState = getImgRowState(row);
   toast((cw*ch).toLocaleString()+' px → '+fmtSz(displaySize)+' ('+displayEnc+')','success');
   if(typeof updateBulkUI==='function') updateBulkUI();
 }
@@ -1200,8 +1287,10 @@ async function processDataBuffer(u8, name, id, sizeOverride) {
 
 function addDataFiles(files){for(const f of files)addDataFile(f);}
 
-function addDataFile(file){
-  const id=++jsonCtr, reader=new FileReader();
+function addDataFile(file, isRestore = false, restoreId = null){
+  const id=restoreId || ++jsonCtr;
+  if(!isRestore) saveFileToDB('decodeFiles', id, file);
+  const reader=new FileReader();
   reader.onload=async e=>{
     try {
       await processDataBuffer(new Uint8Array(e.target.result), file.name, id, file.size);
@@ -1260,7 +1349,7 @@ function makeDataRow(id,name,sizeStr,obj,encBadge){
   if(thumbCvs) setupPreview(thumbCvs);
   if(fullCvs) setupPreview(fullCvs);
 
-  row.querySelector('.js-rm').onclick=()=>{row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);};
+  row.querySelector('.js-rm').onclick=()=>{removeFileFromDB('decodeFiles', id); row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);};
   row.querySelector('.js-recon').onclick=()=>reconRow(row,id);
   row.querySelector('.js-dli').onclick=()=>{
     if(!row._done)return;
@@ -1290,7 +1379,7 @@ function makeEncryptedDecodeRow(id,name,sizeStr,obj){
     '<div class="row-progress"><div class="row-progress-bar"></div></div>';
   jsonQueue.appendChild(row);
   row._done=false;
-  row.querySelector('.js-rm').onclick=()=>{row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);};
+  row.querySelector('.js-rm').onclick=()=>{removeFileFromDB('decodeFiles', id); row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);};
   row.querySelector('.js-dec').onclick=async()=>{
     const pass=row.querySelector('.js-dec-pass').value;
     if(!pass){toast('Please enter password','error');return;}
@@ -1330,7 +1419,7 @@ function makeStegoDecodeRow(id, name, imgU8, secretText, len) {
     '</div>';
   jsonQueue.appendChild(row);
   
-  row.querySelector('.js-rm').onclick = () => { URL.revokeObjectURL(imgUrl); row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s'; setTimeout(()=>row.remove(),180); };
+  row.querySelector('.js-rm').onclick = () => { removeFileFromDB('decodeFiles', id); URL.revokeObjectURL(imgUrl); row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s'; setTimeout(()=>row.remove(),180); };
   row.querySelector('.js-cp').onclick = async () => {
     try { await navigator.clipboard.writeText(secretText); toast('Copied secret text!', 'success'); }
     catch { toast('Copy failed', 'error'); }
@@ -1365,6 +1454,7 @@ function makeGenericDecodeRow(id,name,sizeStr,obj){
   jsonQueue.appendChild(row);
   row._obj=obj;row._done=false;
   row.querySelector('.js-rm').onclick=()=>{
+    removeFileFromDB('decodeFiles', id);
     if(row._blobUrl) URL.revokeObjectURL(row._blobUrl);
     row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';
     setTimeout(()=>row.remove(),180);
