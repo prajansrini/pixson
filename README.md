@@ -1,89 +1,53 @@
 # Pixson — Universal File ↔ Text Encoder
 
-> A 100% client-side web application that converts **any file** — images, PDFs, audio, documents, spreadsheets — into compact, copy-pasteable text data and reconstructs them back perfectly. Includes **Pixen** and **Pixen Ultra**, custom lossless compression encodings. Zero external libraries. Zero server calls. Your files never leave your browser.
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Zero Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
+![Client Side Only](https://img.shields.io/badge/backend-none-lightgrey)
 
----
+> A 100% client-side web application that converts **any file** — images, PDFs, audio, documents, spreadsheets — into compact, copy-pasteable text data and reconstructs them back perfectly. Features custom lossless image compression encodings, selective bulk bundling, AES-GCM encryption, QR Code generation, and IndexedDB session auto-saving. Zero external libraries. Zero server calls. Your files never leave your browser.
 
-## Table of Contents
-
-- [Overview](#overview)
-- [Features](#features)
-- [File Structure](#file-structure)
-- [How to Run](#how-to-run)
-- [Supported File Types](#supported-file-types)
-- [Image Encoding Formats](#image-encoding-formats)
-- [Container Formats](#container-formats)
-- [Pixen Encoding — Deep Dive](#pixen-encoding--deep-dive)
-- [Pixen Ultra Encoding — Deep Dive](#pixen-ultra-encoding--deep-dive)
-- [Generic File Encoding](#generic-file-encoding)
-- [JSON Output Schema](#json-output-schema)
-- [PXN Binary Format](#pxsn-binary-format)
-- [Architecture & Tech Stack](#architecture--tech-stack)
-- [UI / UX](#ui--ux)
-- [Performance & Safety](#performance--safety)
-- [Development Log](#development-log)
-
----
-
-## Overview
-
-Pixson is a browser-based universal encoder/decoder with two core modes:
-
-| Mode | Input | Output |
-|------|-------|--------|
-| **Encode** | Any file (images, PDF, DOCX, MP3, CSV, ZIP, etc.) | Compressed text/binary data in chosen format |
-| **Decode** | Pixson-format JSON, GZipped JSON, or PXN binary | Reconstructed original file (byte-for-byte identical) |
-
-### Image-Specific Capabilities
-
-| Input | Output |
-|-------|--------|
-| PNG, JPG, JPEG, SVG, WebP, BMP, GIF | JSON with pixel data in 7 encoding schemes |
-| Pixson image JSON | Reconstructed PNG, JPEG, or WebP image |
+![Pixson Demo](demo.gif)
 
 ---
 
 ## Features
 
 ### Core
-- **Universal File Encoding** — Encode literally any file type into copy-pasteable JSON text
-- **7 Image Encoding Schemes** — From human-readable hex strings to ultra-compressed Pixen Ultra
-- **3 Container Formats** — JSON Text, GZipped JSON, PXN Binary
-- **Lossless Round-Trip** — Decoded files are byte-for-byte identical to originals
-- **Multi-File Queue** — Encode/decode multiple files simultaneously with per-row controls
-- **Copy & Paste Workflow** — Copy encoded text, switch tabs, paste to decode — no file downloads needed
+- **Universal File Encoding** — Encode literally any file type into copy-pasteable text or binary blocks.
+- **7 Image Encoding Schemes** — Ranging from human-readable hex strings to ultra-compressed Pixen Ultra.
+- **Selective Bundling** — Checkbox-driven selection to merge multiple files into a single `.bundle.pxsn` or encrypted archive.
+- **Persistent Sessions** — IndexedDB automatically saves your queue; refresh without losing your files.
+- **AES-GCM Encryption** — Military-grade password protection applied directly via Web Crypto API.
+- **QR Code Generation** — Instantly generate QR codes for encoded files directly in the browser.
+- **Lossless Round-Trip** — Decoded files are byte-for-byte identical to the original inputs.
 
 ### UI/UX
-- **Dual Theme** — Blue/black dark mode and warm peach light mode with smooth toggle
-- **Glassmorphism Design** — Frosted glass cards, animated particles, gradient accents
-- **Progress Bars** — Animated indeterminate progress bars on every encode/decode operation
-- **Buffered Paste System** — Large text pastes (>50 KB) are intercepted and buffered to prevent browser crashes
-- **Paste Loading Overlay** — Spinner overlay appears while processing pasted data
-- **Toast Notifications** — Color-coded success/error/info feedback
-- **File Type Icons** — Emoji-based file type recognition (📄 PDF, 🎵 MP3, 📊 PPTX, etc.)
-- **Hex Dump Viewer** — Binary formats (GZIP, PXN) show professional hex dump previews
-- **Scrollable Previews** — JSON/hex previews are capped and scrollable, never full-screen
-- **Responsive Design** — Adapts to mobile and desktop viewports
-
-### Performance
-- **100% Client-Side** — Zero network requests, works offline after page load
-- **Zero Dependencies** — No npm, no frameworks, no external libraries
-- **Native Compression** — Uses browser's built-in `CompressionStream` / `DecompressionStream` APIs
-- **Async Processing** — `await sleep()` yields between heavy operations to keep UI responsive
+- **Dual Theme** — Dark mode (Blue/Black) and Light mode (Peach) with dynamic glassmorphism and animated scrolling.
+- **Keyboard Navigation** — Full support for `Escape` key to fluidly close active modals and prompts.
+- **Smart Bulk Logic** — "Select All" actions automatically detect mismatched states, auto-compile them, and preserve state memory across different batch actions (e.g., Download vs. Bundle).
+- **Interactive Physics** — Dynamic UI features including a physics-based, draggable spinning logo.
+- **File Type Icons** — Emoji-based file type recognition (📄 PDF, 🎵 MP3, 📊 PPTX, etc.).
 
 ---
 
-## File Structure
+## Table of Contents
 
-```
-newproj2/
-├── index.html      # UI layout (89 lines)
-├── index.css       # Design system — dark/light themes (214 lines)
-├── app.js          # Core logic — encoders, decoders, UI handlers (918 lines)
-└── run.sh          # Dev server launcher
-```
+- [Features](#features)
+- [How to Run](#how-to-run)
+- [Supported File Types](#supported-file-types)
+- [Image Encoding Algorithms](#image-encoding-algorithms)
+- [Generic File Encoding Pipeline](#generic-file-encoding-pipeline)
+- [Container Formats & The PXSN Standard](#container-formats--the-pxsn-standard)
+  - [PXSN Binary Deep Dive](#pxsn-binary-deep-dive)
+  - [Pixson Bundles](#pixson-bundles)
+- [Security: Encryption Architecture](#security-encryption-architecture)
+- [Architecture & Tech Stack](#architecture--tech-stack)
+- [UI / UX Innovations](#ui--ux-innovations)
+- [Development Log](#development-log)
 
 ---
+
+
 
 ## How to Run
 
@@ -93,278 +57,157 @@ chmod +x run.sh
 # → Starts on http://localhost:3080
 ```
 
-Or manually:
+Or manually: `python3 -m http.server 3080`
 
-```bash
-python3 -m http.server 3080
-```
+> **Note:** Because Pixson uses modern browser APIs like `CompressionStream`, `IndexedDB`, and `OffscreenCanvas`, you must run it through a local server. Opening `index.html` directly via the file system (`file://`) will result in CORS and security context errors.
+> 
+> **Browser Support:** A modern Chromium-based browser (Chrome, Edge, Brave) is highly recommended for full feature support (specifically `OffscreenCanvas` and `CompressionStream`).
 
 No build step. No install. Just serve static files.
+
+---
+
+## Project Structure
+
+```text
+pixson/
+├── index.html       # Main UI and layout
+├── index.css        # Vanilla CSS styling and animations
+├── app.js           # Core logic, UI events, memory state, and QR library
+├── pxsn-v2.js       # Encoding algorithms, compression, and PXSN format handler
+└── run.sh           # Local Python web server script
+```
 
 ---
 
 ## Supported File Types
 
 ### Encode Tab — Input
-| Category | Formats | Handling |
-|----------|---------|----------|
-| **Images** | PNG, JPG, JPEG, SVG, WebP, BMP, GIF | Pixel-level encoding with 7 schemes + dimension controls |
-| **Documents** | PDF, DOC, DOCX, PPT, PPTX, TXT, HTML, CSS, JS | Binary GZIP + Base64 compression |
-| **Spreadsheets** | XLS, XLSX, CSV | Binary GZIP + Base64 compression |
-| **Audio** | MP3, WAV | Binary GZIP + Base64 compression |
-| **Video** | MP4, MOV | Binary GZIP + Base64 compression |
-| **Archives** | ZIP, RAR | Binary GZIP + Base64 compression |
-| **Any Other** | * | Binary GZIP + Base64 compression |
+| Category | Handling |
+|----------|----------|
+| **Images** (PNG, JPG, SVG, WebP) | Pixel-level encoding (Canvas extraction) with 7 specific schemes |
+| **Documents, Audio, Video, Archives** | Binary payload extraction → CompressionStream → Base64 serialization |
 
 ### Decode Tab — Input
 | Format | Detection |
 |--------|-----------|
-| JSON Text (`.json`) | Standard JSON parse |
-| GZipped JSON (`.json.gz`) | Magic bytes `1F 8B` |
-| PXN Binary (`.pxsn`) | Magic bytes `PXEN` (50 58 45 4E) |
-| Base64 String (pasted) | Auto-detected when text doesn't start with `{` or `[` |
+| PXSN Binary (`.pxsn`) | Magic bytes `PXSV` (50 58 53 56) |
+| GZipped JSON (`.json.gz`) | Magic bytes `1F 8B`, decompressed and parsed |
+| Plain JSON (`.json`) | Auto-detected when content starts with `{` or `[` |
+| Pasted Base64 | Auto-detected and recursively decoded into its underlying format |
 
 ---
 
-## Image Encoding Formats
+## Image Encoding Algorithms
 
-| # | Encoding | ID | Size Category | Description |
-|---|----------|----|---------------|-------------|
-| 1 | **Hex String** | `hex` | Medium | Each pixel as `"FF8040"` — human-readable |
-| 2 | **24-bit Integer** | `int` | Small | Each pixel as `16744512` — numeric |
-| 3 | **Packed Array** | `packed` | Small | Row-major integer arrays |
-| 4 | **Base64 Binary** | `base64` | Smaller | Raw RGB bytes → Base64 string |
-| 5 | **Pixen** | `pixen` | Smallest | Delta-filter + Deflate compression |
-| 6 | **Pixen Ultra** | `pixenultra` | Ultra | Palette + RLE + Deflate with auto-tolerance |
-| 7 | **WebP Lossless** | `webp` | Ultimate | Browser-native WebP lossless encoder |
+When an image is passed to Pixson, it is drawn to an offscreen Canvas, and its raw RGBA byte arrays (`getImageData`) are extracted. Pixson offers 7 algorithms to serialize this data:
 
-### Image-Specific Controls
-- **Original Size Toggle** — Preserve source dimensions or downscale
-- **Max Dimensions** — Cap width/height (default: 256px) for smaller output
-- **Encoding Selector** — Choose from the 7 schemes above
-- **Container Format** — JSON, GZIP, or PXN binary output
+### 1. Hex String (`hex`)
+Each pixel is mapped to a 6-character hex string (e.g. `"FF8040"`). Output is a 2D array of strings. Highly readable, zero compression.
 
----
+### 2. 24-bit Integer (`int`)
+Pixels are converted to a single integer: `(r << 16) | (g << 8) | b`. Smaller than hex strings.
 
-## Container Formats
+### 3. Packed Array (`packed`)
+Instead of a 2D array of strings, all pixels are flattened into a 1D row-major array of integers.
 
-| Container | Extension | Type | Best For |
-|-----------|-----------|------|----------|
-| **JSON Text** | `.json` | Text | Copy-paste workflows, readability |
-| **GZipped JSON** | `.json.gz` | Binary | Smallest JSON-based output |
-| **PXN Binary** | `.pxsn` | Binary | Maximum compression — strips all JSON overhead |
+### 4. Base64 Binary (`base64`)
+Raw RGB byte array is directly converted to a Base64 string. 
 
----
+### 5. Pixen (Delta-Filter + Deflate)
+Inspired by the PNG specification. 
+1. **Filtering**: Each row is evaluated against 3 filters:
+   - *None*: Raw pixel byte.
+   - *Sub*: Difference between current byte and the byte 1 pixel to the left.
+   - *Up*: Difference between current byte and the byte exactly above it.
+2. **Entropy Selection**: The algorithm calculates the absolute sum of deviations for all 3 filters and selects the one with the lowest entropy (closest to 0).
+3. **Deflate**: The filtered byte array is passed through the native `CompressionStream('deflate')`.
 
-## Pixen Encoding — Deep Dive
+### 6. Pixen Ultra (Palette + RLE + Deflate)
+Exploits color repetition instead of spatial deltas.
+1. **Color Quantization (Auto-Tolerance)**: Builds a palette of unique colors using a spatial-hash bucketed search. It attempts 7 tolerance levels (0, 4, 8, 12, 16, 20, 24) and merges similar colors.
+2. **Run-Length Encoding (RLE)**: Consecutive identical palette indices are converted to `[index, count]` pairs. Counts use Variable-Length Integers (Varints) to save bytes.
+3. **Deflate**: The Header + Palette + RLE Stream is deflated. The tolerance producing the smallest compressed block is selected.
 
-Pixen is a custom lossless image compression algorithm that mirrors PNG's internal strategy:
-
-### Algorithm Pipeline
-
-```
-Raw RGB pixels (W × H × 3 bytes)
-    │
-    ▼
-┌─────────────────────────────────┐
-│  Per-Row Adaptive Filtering     │
-│  Evaluate 3 filter types:       │
-│  • None (type 0) — raw bytes    │
-│  • Sub  (type 1) — delta left   │
-│  • Up   (type 2) — delta above  │
-│  Pick filter with lowest entropy │
-└─────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────┐
-│  Deflate Compression            │
-│  (Native CompressionStream API) │
-└─────────────────────────────────┘
-    │
-    ▼
-  Base64 string in JSON
-```
-
-### Filter Functions
-
-```javascript
-// Sub filter: difference from pixel to the left
-filterSub(row, bpp) → (pixel[i] - pixel[i - bpp] + 256) & 0xFF
-
-// Up filter: difference from pixel above
-filterUp(row, prev) → (pixel[i] - prev[i] + 256) & 0xFF
-
-// Entropy heuristic: sum of absolute deviations
-sumAbs(arr) → Σ (v < 128 ? v : 256 - v)
-```
+### 7. WebP Lossless (`webp`)
+Bypasses custom algorithms and asks the browser to generate a native `image/webp` blob losslessly, which is then serialized.
 
 ---
 
-## Pixen Ultra Encoding — Deep Dive
+## Generic File Encoding Pipeline
 
-Pixen Ultra is a fundamentally different approach that exploits **color repetition** rather than spatial deltas:
+For non-image files (PDFs, ZIPs, MP3s), Pixson extracts the raw binary payload
+and lets you choose both an encoding scheme and a container format independently.
 
-### Algorithm Pipeline
+**Step 1 — Extraction**: `FileReader.readAsArrayBuffer()` loads the raw bytes into a `Uint8Array`.
 
-```
-Raw RGB pixels
-    │
-    ▼
-┌─────────────────────────────────────┐
-│  Color Quantization (with tolerance)│
-│  • Build palette of unique colors   │
-│  • Spatial-hash bucketed search     │
-│  • Merge colors within ±tolerance   │
-│  • Auto-tries: 0, 4, 8, 12, 16,    │
-│    20, 24 — picks smallest output   │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│  Run-Length Encoding (RLE)          │
-│  Consecutive identical palette      │
-│  indices → [index, count] pairs     │
-│  Max run length: 32767 (varint)     │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│  Binary Packing                     │
-│  Header + Palette + RLE stream      │
-│  Varint counts for space efficiency │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│  Deflate Compression                │
-│  (Native CompressionStream API)     │
-└─────────────────────────────────────┘
-    │
-    ▼
-  Base64 string in JSON
-```
+**Step 2 — Encoding** (user choice):
+| Scheme | How it works | Size |
+|--------|-------------|------|
+| **GZip** (default) | Raw bytes pushed through `CompressionStream('gzip')`, stored directly — no text encoding layer | Smallest |
+| **Base64** | Raw bytes converted to Base64 text, stored as UTF-8 | ~33% larger than raw |
+| **Base85** | Raw bytes converted to Base85 text, stored as UTF-8 | ~25% smaller than Base64 |
 
-### Binary Layout (before Deflate)
-
-| Offset | Size | Field |
-|--------|------|-------|
-| 0 | 1 byte | Version (= 1) |
-| 1 | 2 bytes | Palette count (LE) |
-| 3 | N × 3 bytes | Palette RGB entries |
-| 3 + N×3 | 4 bytes | Total pixel count (LE) |
-| 7 + N×3 | variable | RLE pairs |
-
-### RLE Pair Encoding
-
-| Palette Size | Index Size | Count Encoding |
-|-------------|------------|----------------|
-| ≤ 256 colors | 1 byte | Varint: ≤127 = 1 byte, >127 = 2 bytes |
-| > 256 colors | 2 bytes (LE) | Varint: ≤127 = 1 byte, >127 = 2 bytes |
-
-### Auto-Tolerance Optimization
-The encoder tries 7 tolerance levels (0, 4, 8, 12, 16, 20, 24) and picks whichever produces the smallest compressed output. Higher tolerance merges more similar colors → fewer palette entries → longer RLE runs → smaller file.
-
-- **Tolerance 0** = Fully lossless (exact colors)
-- **Tolerance 24** = Near-lossless (±24 per channel, visually imperceptible)
-
-### Performance: Spatial Hash Bucketing
-Instead of O(n×m) brute-force palette search, colors are bucketed by `(r/step, g/step, b/step)` coordinates. Only the 27 neighboring buckets are searched, giving ~100x speedup on large images.
+**Step 3 — Container** (user choice): The encoded payload is wrapped in either
+JSON Text, GZipped JSON, or the PXSN binary container along with the filename,
+original size, and MIME type needed for reconstruction.
 
 ---
 
-## Generic File Encoding
+## Container Formats & The PXSN Standard
 
-For non-image files, Pixson uses a simpler pipeline:
+The JSON encoding wrapper is robust, but the `{ "data": "base64..." }` overhead wastes space. Pixson offers three export containers:
 
-```
-Any file → Read as ArrayBuffer → Deflate compress → Base64 encode → JSON wrapper
-```
+1. **JSON Text (`.json`)**: Raw text file. Best for direct copy-pasting.
+2. **GZipped JSON (`.json.gz`)**: The JSON string compressed.
+3. **PXN Binary (`.pxsn`)**: A custom, hyper-compact binary container that abandons Base64 entirely.
 
-### JSON Output
+### PXSN Binary Deep Dive
 
-```json
-{
-  "format": "pixson-file-v1",
-  "filename": "report.pdf",
-  "mimeType": "application/pdf",
-  "originalSize": 1234567,
-  "encoding": "gzip+base64",
-  "data": "eJzLSM3JyVcozy/KSVEA..."
-}
-```
+The `.pxsn` file extension stands for Pixson Archive. It is a strictly structured binary format designed to eliminate the ~33% bloat caused by Base64 encoding.
 
-### Decoding
+**Structure of a PXSN File:**
+| Offset (Bytes) | Size | Data Type | Description |
+|----------------|------|-----------|-------------|
+| `0` | 4 | `ASCII` | Magic Header: `PXSV` (50 58 53 56) |
+| `4` | 1 | `Uint8` | Version Flag (`0x02`) |
+| `5` | 1 | `Uint8` | File Type (0=Generic, 1=Image, 2=Bundle) |
+| `6` | 1 | `Uint8` | Encoding Strategy (Pixen, GZip, etc.) |
+| `7` | 1 | `Uint8` | Bit Flags (e.g., Encrypted) |
+| `8` | 4 | `Uint32 LE` | Original Uncompressed Size |
+| `12` | 2 | `Uint16 LE` | Filename Length (N) |
+| `14` | 2 | `Uint16 LE` | MIME Type Length (M) |
+| `16` | N | `UTF-8` | Filename String |
+| `16+N` | M | `UTF-8` | MIME Type String |
+| `16+N+M` | Var | `Binary` | Compressed Payload Bitstream |
+| `EOF-4` | 4 | `Uint32 LE` | CRC-32 Data Integrity Checksum |
 
-```
-JSON → Parse → Base64 decode → Deflate decompress → Original file bytes → Download
-```
+*Why this matters:* By omitting Base64, a 30KB Pixen string drops to roughly ~22KB in `.pxsn` format, making it the most mathematically optimal container.
 
-The round-trip is **100% lossless** — the decoded file is byte-for-byte identical to the original.
+### Pixson Bundles
+When using the **"Bundle into 1 File"** feature, Pixson creates a compact multi-file archive.
 
----
+1. Each selected file is individually encoded as a complete, self-contained PXSN file with its own CRC-32 integrity checksum.
+2. These files are packed using a binary framing structure: a 4-byte file count followed by length-prefixed PXSN blocks.
+3. The entire frame is gzip-compressed and stored as `workspace.bundle.pxsn`.
 
-## JSON Output Schema
-
-### Image Format (`pixson-v1` / `pixen-v1`)
-
-```json
-{
-  "format": "pixson-v1",
-  "width": 256,
-  "height": 144,
-  "encoding": "hex",
-  "totalPixels": 36864,
-  "pixels": [
-    ["ff0000", "00ff00", "0000ff"],
-    ["..."]
-  ]
-}
-```
-
-### Binary Data Format (Pixen / Pixen Ultra / WebP / Base64)
-
-```json
-{
-  "format": "pixen-v1",
-  "width": 256,
-  "height": 144,
-  "encoding": "pixen",
-  "totalPixels": 36864,
-  "data": "eJzLSM3JyVcozy/KSVEA..."
-}
-```
-
-### Generic File Format
-
-```json
-{
-  "format": "pixson-file-v1",
-  "filename": "song.mp3",
-  "mimeType": "audio/mpeg",
-  "originalSize": 4521984,
-  "encoding": "gzip+base64",
-  "data": "H4sIAAAAAAAA..."
-}
-```
+When dropped into the Decode tab, Pixson reads the PXSV magic header, decompresses the bundle, and reconstructs every inner file simultaneously — each verified independently by its own CRC-32.
 
 ---
 
-## PXN Binary Format
+## Security: Encryption Architecture
 
-The PXN container strips all JSON/Base64 overhead for maximum compression.
+Pixson integrates AES-GCM (Advanced Encryption Standard - Galois/Counter Mode) via the Web Crypto API (`window.crypto.subtle`) for military-grade file protection.
 
-### Header (13 bytes)
+**Encryption Flow (`encryptData`):**
+1. **Key Derivation**: Takes the user's password and generates a 16-byte random Salt. Uses PBKDF2 (100,000 iterations, SHA-256) to derive a 256-bit AES key.
+2. **Encryption**: Generates a 12-byte random Initialization Vector (IV). Encrypts the raw data payload using `AES-GCM`.
+3. **Packaging**: Exports a JSON object containing the `salt`, `iv`, and encrypted `data` (all Base64-encoded).
 
-| Offset | Size | Value | Description |
-|--------|------|-------|-------------|
-| 0–3 | 4 bytes | `PXEN` (50 58 45 4E) | Magic bytes |
-| 4–7 | 4 bytes | uint32 LE | Image width |
-| 8–11 | 4 bytes | uint32 LE | Image height |
-| 12 | 1 byte | 1 or 2 | Encoding type (1=Pixen, 2=Pixen Ultra) |
-
-### Body (offset 13+)
-
-Raw deflated bytes (output of CompressionStream). No Base64 wrapping, no JSON overhead.
+**Decryption Flow (`decryptData`):**
+1. Extracts the `salt` and `iv` from the JSON block.
+2. Runs PBKDF2 on the user-provided password using the extracted salt to regenerate the exact 256-bit AES key.
+3. Decrypts the payload using the key and the original IV. If the password is wrong, the Web Crypto API throws an auth tag verification error, and Pixson rejects the file.
 
 ---
 
@@ -373,68 +216,23 @@ Raw deflated bytes (output of CompressionStream). No Base64 wrapping, no JSON ov
 | Layer | Technology |
 |-------|-----------|
 | **Structure** | Semantic HTML5 |
-| **Styling** | Vanilla CSS with CSS custom properties (no frameworks) |
-| **Logic** | Vanilla JavaScript (IIFE, strict mode) |
-| **Compression** | Native `CompressionStream` / `DecompressionStream` (deflate, gzip) |
-| **Image Processing** | Canvas API (`getImageData`, `putImageData`, `toBlob`) |
-| **WebP Encoding** | Native `canvas.toBlob('image/webp', 1.0)` |
-| **File I/O** | `FileReader`, `Blob`, `URL.createObjectURL` |
-| **Fonts** | Google Fonts (Inter, JetBrains Mono) |
-| **Server** | Python `http.server` (static file serving only) |
+| **Styling** | Vanilla CSS (CSS custom properties, flexbox, grid, transforms) |
+| **Logic** | Vanilla JavaScript (ES6+, async/await, IIFE) |
+| **Compression** | `CompressionStream` / `DecompressionStream` APIs |
+| **Cryptography** | `window.crypto.subtle` (AES-GCM, PBKDF2) |
+| **Database** | IndexedDB (Asynchronous workspace persistence) |
 
 ### Zero Dependencies
-No npm, no node_modules, no webpack, no React, no Tailwind. Every byte is hand-written or browser-native.
+No npm, no webpack, no React. Every byte is hand-written or relies exclusively on modern browser-native APIs (even QR Code generation is bundled in a single file!).
 
 ---
 
-## UI / UX
+## UI / UX Innovations
 
-### Themes
-
-| Theme | Background | Accent | Cards |
-|-------|-----------|--------|-------|
-| **Dark** | `#050510` (deep navy) | `#3b82f6` (blue) | Frosted glass with blue borders |
-| **Light** | `#fdf5ef` (warm cream) | `#c2703c` (peach/amber) | Frosted glass with peach borders |
-
-### Design Elements
-- **Glassmorphism** — `backdrop-filter: blur()` on cards and modals
-- **Animated Particles** — 20 floating dots in the background
-- **Spinning Logo** — 25-second CSS rotation on the pixel-grid SVG icon
-- **Pill Tabs** — Sliding gradient indicator between Encode/Decode
-- **Micro-Animations** — Row cards slide in, removed cards fade out, buttons scale on press
-- **Responsive Breakpoint** — Stacked layout below 600px
-
-### Progress & Loading
-- **Row Progress Bars** — Animated indeterminate bar slides across each card during processing
-- **Paste Overlay** — Spinner + label covers the paste area while data is being buffered
-- **Buffered Paste System** — Pastes over 50 KB are intercepted (`preventDefault`) and stored in a JS variable to prevent browser crashes from rendering megabytes of text in a textarea DOM element
-
-### File Type Icons
-
-| Extension | Icon | Extension | Icon |
-|-----------|------|-----------|------|
-| PDF | 📄 | MP3, WAV | 🎵 |
-| DOC, DOCX | 📝 | MP4, MOV | 🎬 |
-| PPT, PPTX | 📊 | ZIP, RAR | 📦 |
-| XLS, XLSX | 📗 | HTML | 🌐 |
-| CSV | 📋 | CSS | 🎨 |
-| TXT, JSON | 📃 | JS | ⚙️ |
-| Other | 📎 | | |
-
----
-
-## Performance & Safety
-
-### Browser Crash Prevention
-- **Buffered Paste** — Text over 50 KB is `preventDefault()`-ed and stored in a JS variable instead of the textarea DOM
-- **Preview Cap** — JSON preview text is truncated at 50 KB with a "click Download for full file" notice
-- **Async Yields** — `await sleep(10)` between heavy computation to keep the main thread responsive
-- **Hex Dump Limit** — Binary previews cap at 512 bytes to avoid DOM bloat
-
-### Privacy
-- **No Network Requests** — Everything runs in the browser tab
-- **No Cookies** — Only `localStorage` for theme preference
-- **No Analytics** — Zero tracking, zero telemetry
+- **IndexedDB Auto-Save**: Files dropped into the queue are immediately serialized into an IndexedDB database. Refreshing or accidentally closing the tab will reload the exact state of your workspace instantly.
+- **Buffered Paste Interception**: Pasting megabytes of Base64 into a browser `<textarea>` will crash the rendering engine. Pixson intercepts the `paste` event, calls `e.preventDefault()`, and buffers the text payload directly into JavaScript memory.
+- **Smart Selection Binding**: The Bulk Action bar tracks DOM checkbox states (`.js-row-sel`) and dynamically updates button availability.
+- **Auto-Compile Verification**: Clicking "Bundle" or "Download All" triggers an asynchronous state verification loop (`autoCompileBulk`). If a row's current configuration (e.g., changed from Base64 to Pixen Ultra) doesn't match its cached compiled blob, the app automatically re-encodes the specific row before executing the bulk action.
 
 ---
 
@@ -449,32 +247,17 @@ No npm, no node_modules, no webpack, no React, no Tailwind. Every byte is hand-w
 | **v5** | Container formats (JSON, GZIP, PXN Binary), hex dump viewer |
 | **v6** | Copy/paste Base64 workflow for binary formats |
 | **v7** | Pixen Ultra (palette + RLE + deflate), spatial-hash quantizer |
-| **v8** | Universal file encoding (PDF, MP3, DOCX, etc.), buffered paste system, progress bars, tab rename to Encode/Decode |
+| **v8** | Universal file encoding (PDF, MP3, DOCX), buffered paste system |
+| **v9** | **Major Refactor**: IndexedDB Auto-Save, Selective Bundling UI, AES-GCM Encryption logic, Auto-compile state-verification for bulk actions, removal of Steganography module for architectural purity. |
+| **v10**| Zero-dependency architecture integration, integrated QR code generator, enhanced modal Escape-key listeners, physics-based rotation interactions, independent batch workflow memory persistence, and strict UI safety guards for destructive actions. |
 
----
-
-## Compression Comparison (Typical 256×144 Image)
-
-| Encoding + Container | Typical Output Size | Notes |
-|---------------------|-------------------|-------|
-| Hex + JSON | ~150 KB | Human-readable, largest |
-| 24-bit Int + JSON | ~110 KB | Numeric, readable |
-| Base64 + JSON | ~75 KB | Raw bytes, no compression |
-| Pixen + JSON | ~35 KB | Delta-filtered + deflated |
-| Pixen Ultra + JSON | ~25–35 KB | Palette + RLE + deflated |
-| WebP Lossless + JSON | ~15–25 KB | Browser-native, often smallest |
-| Pixen + PXN Binary | ~25 KB | Strips JSON/Base64 overhead |
-| Pixen Ultra + PXN Binary | ~18–28 KB | Maximum pixel compression |
-| WebP Lossless + GZIP | ~12–20 KB | Often the absolute smallest |
-
-> [!NOTE]
-> Actual sizes depend heavily on image content. Photos with many unique colors compress less than illustrations or screenshots with flat regions.
-
-> [!IMPORTANT]
-> When the source image is a lossy JPEG, lossless re-encoding will typically produce output **similar in size** to the original — because the JPEG's compression artifacts become "real" data that must be faithfully stored. This is a fundamental limitation of information theory, not a bug.
+### Roadmap
+- **Planned**: Direct text-to-file decompression for streaming text directly into `Blob` handles.
+- **Planned**: Integration of the upcoming PXSN v3 container format for advanced metadata.
+- **Planned**: Extended testing across non-Chromium browsers (Firefox/Safari).
 
 ---
 
 ## License
 
-This project is provided as-is for educational and personal use.
+This project is licensed under the MIT License.

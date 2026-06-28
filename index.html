@@ -17,21 +17,27 @@
     <div class="header-top">
       <div class="logo">
         <div class="logo-icon">
-          <img src="logop.png" alt="Logo" class="logo-img" id="mainLogoImg">
+          <img src="logop.png" alt="Logo" class="logo-img" id="mainLogoImg" draggable="false">
         </div>
         <h1 class="logo-text">Pixson</h1>
       </div>
-      <button class="theme-toggle" id="themeToggle" title="Toggle light/dark theme">
-        <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-        <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      </button>
+      <div class="header-actions">
+        <button class="info-btn" id="infoBtn" title="Formats Guide">
+          <span style="font-family: Georgia, serif; font-style: italic; font-weight: bold; font-size: 20px; line-height: 1; transform: translateY(-1px);">i</span>
+        </button>
+        <button class="theme-toggle" id="themeToggle" title="Toggle light/dark theme">
+          <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
     </div>
-    <p class="tagline">Encode any file into compact text — images, documents, audio & more</p>
+    <p class="tagline">Encode any file into compact text. Share anything, anywhere.</p>
+    <div class="sub-tagline" id="wittyQuote">Because sometimes a file needs to cosplay as text.</div>
   </header>
 
   <nav class="mode-tabs">
-    <button class="tab active" id="tabImg2Json">Encode</button>
-    <button class="tab" id="tabJson2Img">Decode</button>
+    <button class="tab active" id="tabImg2Json"><u>E</u>ncode</button>
+    <button class="tab" id="tabJson2Img"><u>D</u>ecode</button>
     <div class="tab-indicator" id="tabIndicator"></div>
   </nav>
 
@@ -49,12 +55,11 @@
           <input type="file" id="imgFileInput" multiple hidden />
         </div>
       </div>
-      <div class="bulk-actions-bar" id="bulkEncodeBar" style="display:none">
-        <span class="bulk-count"><span id="bulkEncodeCount">0</span> items</span>
+      <div class="bulk-actions-bar" id="bulkEncodeBar" style="display:none; justify-content: flex-end;">
         <div class="bulk-btns">
-          <button class="btn btn-sm btn-primary" id="btnProcessAllEncode">Encode All</button>
-          <button class="btn btn-sm btn-accent" id="btnDownloadAllEncode" disabled>Download All (ZIP)</button>
-          <button class="btn btn-sm btn-accent" id="btnBundleAllEncode" disabled>Bundle into 1 File</button>
+          <button class="btn btn-sm btn-primary" id="btnProcessAllEncode">Encode...</button>
+          <button class="btn btn-sm btn-accent" id="btnDownloadAllEncode">Download (ZIP)...</button>
+          <button class="btn btn-sm btn-accent" id="btnBundleAllEncode">Bundle into 1 File...</button>
           <button class="btn btn-sm btn-ghost" id="btnClearAllEncode">Clear All</button>
         </div>
       </div>
@@ -81,11 +86,10 @@
         </div>
         <textarea class="json-textarea" id="jsonTextInput" placeholder='Paste Pixson JSON or Base64 data here and click "Add to queue"'></textarea>
       </div>
-      <div class="bulk-actions-bar" id="bulkDecodeBar" style="display:none">
-        <span class="bulk-count"><span id="bulkDecodeCount">0</span> items</span>
+      <div class="bulk-actions-bar" id="bulkDecodeBar" style="display:none; justify-content: flex-end;">
         <div class="bulk-btns">
-          <button class="btn btn-sm btn-primary" id="btnProcessAllDecode">Decode All</button>
-          <button class="btn btn-sm btn-accent" id="btnDownloadAllDecode" disabled>Download All (ZIP)</button>
+          <button class="btn btn-sm btn-primary" id="btnProcessAllDecode">Decode...</button>
+          <button class="btn btn-sm btn-accent" id="btnDownloadAllDecode">Download (ZIP)...</button>
           <button class="btn btn-sm btn-ghost" id="btnClearAllDecode">Clear All</button>
         </div>
       </div>
@@ -100,6 +104,41 @@
     <img id="imageModalImg" src="" alt="Preview">
   </div>
 
+  <div id="infoModal" class="custom-prompt-modal">
+    <div class="custom-prompt-box" style="max-width: 650px; max-height: 85vh; overflow-y: auto; text-align: left; padding: 30px;">
+      <h3 style="margin-bottom: 20px; font-size: 1.4rem; color: var(--accent);">About Pixson & File Encodings</h3>
+      <div style="font-size: 0.95rem; color: var(--text-2); line-height: 1.6;">
+
+        <h4 style="color: var(--text); margin: 0 0 5px;">What is Pixson?</h4>
+        <p>Pixson is a universal file encoder that acts as a "disguise" for your files. Sometimes, you need to share a file (like an image, PDF, or video) on a platform or system that <strong>only accepts plain text</strong> or doesn't support file attachments. Pixson solves this by converting any file into a compact string of text.</p>
+        <p style="margin-top:8px;">You can encode a file into text, copy it, paste it anywhere (like an email, forum, or code snippet), and the recipient can use Pixson's Decode tab to instantly rebuild the original file. It is 100% client-side, meaning your files never leave your browser.</p>
+
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 20px 0;">
+
+        <h4 style="color: var(--text); margin: 15px 0 5px;">Containers (The "Box")</h4>
+        <p><strong>PXSN v2bin:</strong> The newest, fastest format. It creates the smallest possible files and is highly recommended for all your saves.</p>
+        <p><strong>JSON Text (.json):</strong> A standard text format. Great if you need to copy and paste your file as pure text, but it makes the file size a bit larger.</p>
+        <p><strong>GZipped JSON (.json.gz):</strong> The same text format, but zipped up to save space.</p>
+        
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 20px 0;">
+        
+        <h4 style="color: var(--text); margin: 15px 0 5px;">Encodings for Images (The "Data")</h4>
+        <p><strong>Pixen / Pixen Ultra:</strong> Our custom magic formats! They are incredibly good at shrinking pixel art and simple drawings down to almost nothing.</p>
+        <p><strong>WebP Lossless:</strong> The standard choice for photographs and highly detailed, colorful images.</p>
+        <p><strong>Base64 / Hex / Packed / Int:</strong> Alternative text-based formats. Usually, you can ignore these unless a specific app or project requires them.</p>
+        
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 20px 0;">
+        
+        <h4 style="color: var(--text); margin: 15px 0 5px;">Encodings for Generic Files (The "Data")</h4>
+        <p><strong>GZip (Raw Bytes):</strong> A highly efficient compression method that shrinks your files as small as possible. (Only available when using the PXSN v2 container).</p>
+        <p><strong>Base64 / Base85 Text:</strong> Converts your file into a long string of standard text characters. Useful if you need to send a file through a system that only accepts text.</p>
+      </div>
+      <div class="custom-prompt-actions" style="margin-top: 25px; justify-content: flex-end;">
+        <button class="btn btn-sm btn-primary" id="infoCloseBtn">Got it</button>
+      </div>
+    </div>
+  </div>
+
   <div id="promptModal" class="custom-prompt-modal">
     <div class="custom-prompt-box">
       <h3 id="promptTitle">Enter password</h3>
@@ -111,7 +150,26 @@
     </div>
   </div>
 
-  <script src="qrcode.js"></script>
+  <div id="batchModal" class="custom-prompt-modal">
+    <div class="custom-prompt-box" style="max-width: 600px; padding: 25px;">
+      <h3 id="batchModalTitle" style="margin-bottom: 20px;">Select Files</h3>
+      <div id="batchModalList" style="max-height: 400px; overflow-y: auto; text-align: left; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px;">
+        <!-- List injected by JS -->
+      </div>
+      <div class="custom-prompt-actions" style="margin-top: 20px; display: flex; justify-content: space-between;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--text);font-size:0.9rem;">
+          <input type="checkbox" id="batchSelectAll" style="width:16px;height:16px;accent-color:var(--accent);" checked> Select All
+        </label>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-sm btn-ghost" id="batchModalCancel">Cancel</button>
+          <button class="btn btn-sm btn-primary" id="batchModalProceed">Proceed</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <script src="pxsn-v2.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
