@@ -505,6 +505,8 @@ function makeImgRow(id,file,imgEl,dataUrl){
     '<div class="row-result" id="res-'+id+'">'+
       '<div class="row-result-header"><h4>JSON Preview</h4><div class="card-actions">'+
         '<span class="badge badge-enc js-eb"></span><span class="badge badge-size js-js"></span>'+
+        '<button class="btn btn-sm btn-ghost js-cp-html" style="color:var(--cyan);border-color:var(--cyan)" title="Copy <img> tag">HTML</button>'+
+        '<button class="btn btn-sm btn-ghost js-cp-css" style="color:var(--cyan);border-color:var(--cyan)" title="Copy background-image">CSS</button>'+
         '<button class="btn btn-sm btn-ghost js-cp">Copy</button><button class="btn btn-sm btn-accent js-dl">Download</button></div></div>'+
       '<pre class="json-preview js-jp"></pre>'+
     '</div>';
@@ -533,6 +535,35 @@ function makeImgRow(id,file,imgEl,dataUrl){
       toast(row._outFmt==='json'?'Copied JSON!':'Copied as Base64!','success');
     }catch{toast('Copy failed','error');}
   };
+
+  const getWebpB64 = async () => {
+    if (!row._jd) throw new Error('Convert image first');
+    if (row._jd.format === 'pixson-encrypted-v1') throw new Error('Cannot embed encrypted files');
+    if (row._jd.encoding === 'webp' && row._jd.data) return row._jd.data;
+    const cvs = document.createElement('canvas');
+    cvs.width = row._jd.width; cvs.height = row._jd.height;
+    cvs.getContext('2d').drawImage(imgEl, 0, 0, cvs.width, cvs.height);
+    const blob = await new Promise(r => cvs.toBlob(r, 'image/webp', 1.0));
+    const buf = await blob.arrayBuffer();
+    return u8ToB64(new Uint8Array(buf));
+  };
+  row.querySelector('.js-cp-html').onclick = async () => {
+    try {
+      const b64 = await getWebpB64();
+      const html = `<img src="data:image/webp;base64,${b64}" width="${row._jd.width}" height="${row._jd.height}" alt="${row._fn}">`;
+      await navigator.clipboard.writeText(html);
+      toast('Copied HTML <img> tag!', 'success');
+    } catch (e) { toast(e.message, 'error'); }
+  };
+  row.querySelector('.js-cp-css').onclick = async () => {
+    try {
+      const b64 = await getWebpB64();
+      const css = `background-image: url('data:image/webp;base64,${b64}');\nbackground-size: contain;\nbackground-repeat: no-repeat;`;
+      await navigator.clipboard.writeText(css);
+      toast('Copied CSS snippet!', 'success');
+    } catch (e) { toast(e.message, 'error'); }
+  };
+
   row.querySelector('.js-dl').onclick=()=>{
     if(!row._dlBlob)return;
     dlBlob(row._dlBlob, row._dlName);
@@ -647,6 +678,7 @@ async function convertGenericRow(row,id){
     const envJson=JSON.stringify(envObj,null,2);
     fileBlob=new Blob([envJson],{type:'application/json'});
     fileExt='enc.json'; displaySize=fileBlob.size; previewStr=envJson.substring(0,500)+'\n\n... [Encrypted Payload]';
+    row._jd=envObj;
   }
 
   row._dlBlob=fileBlob;row._dlName=row._fn+'.pixson.'+fileExt;row._outFmt=outFmt;
@@ -730,6 +762,7 @@ async function convertImgRow(row,id){
     fileBlob=new Blob([envJson],{type:'application/json'});
     fileExt='enc.json'; displaySize=fileBlob.size; previewStr=envJson.substring(0,500)+'\n\n... [Encrypted Payload]';
     displayEnc='AES-256';
+    row._jd=envObj;
   }
 
   row._dlBlob = fileBlob;
@@ -817,6 +850,7 @@ async function addJsonFromText(text,name){
   }
   try {
     const obj = JSON.parse(text);
+    if(obj.format==='pixson-encrypted-v1'){makeEncryptedDecodeRow(id,name||'pasted-'+id,fmtSz(new Blob([text]).size),obj);return;}
     if(obj.format==='pixson-file-v1'){makeGenericDecodeRow(id,name||'pasted-'+id,fmtSz(new Blob([text]).size),obj);return;}
     makeDataRow(id, name||'pasted-'+id+'.json', fmtSz(new Blob([text]).size), obj, obj.encoding||'hex');
   } catch(e) { toast('Invalid Data: '+e.message, 'error'); }
