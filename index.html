@@ -53,6 +53,13 @@
           <p class="upload-hint">Paste images from clipboard (Ctrl+V) · Multiple files supported</p>
           <input type="file" id="imgFileInput" multiple hidden />
         </div>
+      <div class="bulk-actions-bar" id="bulkEncodeBar" style="display:none">
+        <span class="bulk-count"><span id="bulkEncodeCount">0</span> items</span>
+        <div class="bulk-btns">
+          <button class="btn btn-sm btn-primary" id="btnProcessAllEncode">Encode All</button>
+          <button class="btn btn-sm btn-accent" id="btnDownloadAllEncode" disabled>Download All (ZIP)</button>
+          <button class="btn btn-sm btn-ghost" id="btnClearAllEncode">Clear All</button>
+        </div>
       </div>
       <div class="image-queue" id="imageQueue"></div>
     </section>
@@ -76,6 +83,14 @@
           <button class="btn btn-sm btn-ghost" id="addPastedJson">Add to queue</button>
         </div>
         <textarea class="json-textarea" id="jsonTextInput" placeholder='Paste Pixson JSON or Base64 data here and click "Add to queue"'></textarea>
+      </div>
+      <div class="bulk-actions-bar" id="bulkDecodeBar" style="display:none">
+        <span class="bulk-count"><span id="bulkDecodeCount">0</span> items</span>
+        <div class="bulk-btns">
+          <button class="btn btn-sm btn-primary" id="btnProcessAllDecode">Decode All</button>
+          <button class="btn btn-sm btn-accent" id="btnDownloadAllDecode" disabled>Download All (ZIP)</button>
+          <button class="btn btn-sm btn-ghost" id="btnClearAllDecode">Clear All</button>
+        </div>
       </div>
       <div class="json-queue" id="jsonQueue"></div>
     </section>

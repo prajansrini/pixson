@@ -52,6 +52,25 @@ function rgbInt(r,g,b){return(r<<16)|(g<<8)|b;}
 function showProgress(row){const p=row.querySelector('.row-progress');if(p)p.classList.add('active');}
 function hideProgress(row){const p=row.querySelector('.row-progress');if(p)p.classList.remove('active');}
 
+// ─── Cryptography (AES-256-GCM) ─────────────────────────────
+async function deriveKey(password, salt) {
+  const enc=new TextEncoder();
+  const keyMaterial=await crypto.subtle.importKey('raw', enc.encode(password), {name: 'PBKDF2'}, false, ['deriveBits', 'deriveKey']);
+  return crypto.subtle.deriveKey({name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256'}, keyMaterial, {name: 'AES-GCM', length: 256}, false, ['encrypt', 'decrypt']);
+}
+async function encryptData(u8, password) {
+  const salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(password, salt);
+  const enc=await crypto.subtle.encrypt({name: 'AES-GCM', iv: iv}, key, u8);
+  return { salt: u8ToB64(salt), iv: u8ToB64(iv), data: u8ToB64(new Uint8Array(enc)) };
+}
+async function decryptData(obj, password) {
+  const salt=b64ToU8(obj.salt), iv=b64ToU8(obj.iv), data=b64ToU8(obj.data);
+  const key=await deriveKey(password, salt);
+  try { return new Uint8Array(await crypto.subtle.decrypt({name: 'AES-GCM', iv: iv}, key, data)); }
+  catch(e) { throw new Error('Incorrect password or corrupted data'); }
+}
+
 // ─── Encoding ───────────────────────────────────────────────
 const ENCS=[
   {id:'hex',label:'Hex string',size:'Medium'},
@@ -479,6 +498,8 @@ function makeImgRow(id,file,imgEl,dataUrl){
       '<div class="option-group"><label class="option-label">Max Dimensions</label><input type="number" class="option-input js-maxdim" value="256" min="1" max="4096"></div>'+
       '<div class="option-group"><label class="option-label">Encoding</label><select class="option-select js-enc">'+encOptHTML()+'</select></div>'+
       '<div class="option-group"><label class="option-label">Container Format</label><select class="option-select js-fmt"><option value="json">JSON Text (.json)</option><option value="gz">GZipped JSON (.json.gz)</option><option value="pxn">PXN Binary (.pxn)</option></select></div>'+
+      '<div class="option-group"><label class="option-label">Encrypt</label><label class="toggle-switch"><input type="checkbox" class="js-enc-tog"><span class="toggle-slider"></span></label></div>'+
+      '<div class="option-group"><label class="option-label">Password</label><input type="password" class="option-input js-enc-pass" placeholder="Secret..." disabled></div>'+
     '</div>'+
     '<div class="row-progress"><div class="row-progress-bar"></div></div>'+
     '<div class="row-result" id="res-'+id+'">'+
@@ -491,8 +512,9 @@ function makeImgRow(id,file,imgEl,dataUrl){
   imgQueue.appendChild(row);
   row._img=imgEl;row._fn=file.name;row._jd=null;
 
-  const origTog=row.querySelector('.js-orig'),maxIn=row.querySelector('.js-maxdim');
+  const origTog=row.querySelector('.js-orig'),maxIn=row.querySelector('.js-maxdim'),encTog=row.querySelector('.js-enc-tog'),encPass=row.querySelector('.js-enc-pass');
   origTog.onchange=()=>{maxIn.disabled=origTog.checked;};
+  encTog.onchange=()=>{encPass.disabled=!encTog.checked;if(encTog.checked)encPass.focus();};
   row.querySelector('.js-rm').onclick=()=>{row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);};
   row.querySelector('.js-conv').onclick=()=>convertImgRow(row,id);
   showProgress(row);setTimeout(()=>hideProgress(row),300);
@@ -533,6 +555,25 @@ function addGenericFile(file){
 function makeGenericRow(id,file,u8){
   const icon=getFileIcon(file.name);
   const row=document.createElement('div');row.className='row-card';row.id='ir-'+id;
+
+  const blob=new Blob([u8],{type:file.type||'application/octet-stream'});
+  const url=URL.createObjectURL(blob);
+  const mime=file.type||'';
+  let previewHtml='';
+  if(mime.startsWith('audio/')){
+    previewHtml='<audio controls src="'+url+'" style="width:100%"></audio>';
+  }else if(mime.startsWith('video/')){
+    previewHtml='<video controls src="'+url+'" style="width:100%;max-height:400px;border-radius:6px"></video>';
+  }else if(mime==='application/pdf'){
+    previewHtml='<iframe src="'+url+'" style="width:100%;height:500px;border:none;border-radius:6px;background:#fff"></iframe>';
+  }else if(mime.startsWith('text/')||mime==='application/json'||mime==='application/javascript'||mime==='text/css'){
+    const text=new TextDecoder().decode(u8);
+    const maxL=50000;const disp=text.length>maxL?text.substring(0,maxL)+'\n\n... [truncated]':text;
+    previewHtml='<pre class="json-preview">'+disp.replace(/</g,'&lt;')+'</pre>';
+  }else{
+    previewHtml='<div style="text-align:center;padding:20px;color:var(--text-3);font-size:.85rem">Preview not available for this file type.</div>';
+  }
+
   row.innerHTML=
     '<div class="row-top">'+
       '<div class="row-thumb" style="display:flex;align-items:center;justify-content:center;font-size:2rem;background:var(--bg-input)">'+icon+'</div>'+
@@ -540,8 +581,11 @@ function makeGenericRow(id,file,u8){
         '<div class="row-meta"><span class="badge badge-enc">'+file.name.split('.').pop().toUpperCase()+'</span><span class="badge badge-size">'+fmtSz(file.size)+'</span></div></div>'+
       '<div class="row-actions"><button class="btn btn-sm btn-primary js-conv">Encode</button><button class="btn-remove js-rm">✕</button></div>'+
     '</div>'+
+    '<div class="generic-preview-wrap" style="border-top:none;border-bottom:1px solid var(--border)">'+previewHtml+'</div>'+
     '<div class="row-options">'+
       '<div class="option-group"><label class="option-label">Container</label><select class="option-select js-fmt"><option value="json">JSON Text (.json)</option><option value="gz">GZipped JSON (.json.gz)</option></select></div>'+
+      '<div class="option-group"><label class="option-label">Encrypt</label><label class="toggle-switch"><input type="checkbox" class="js-enc-tog"><span class="toggle-slider"></span></label></div>'+
+      '<div class="option-group"><label class="option-label">Password</label><input type="password" class="option-input js-enc-pass" placeholder="Secret..." disabled></div>'+
     '</div>'+
     '<div class="row-progress"><div class="row-progress-bar"></div></div>'+
     '<div class="row-result" id="res-'+id+'">'+
@@ -551,8 +595,14 @@ function makeGenericRow(id,file,u8){
       '<pre class="json-preview js-jp"></pre>'+
     '</div>';
   imgQueue.appendChild(row);
-  row._u8=u8;row._fn=file.name;row._mime=file.type||'application/octet-stream';row._jd=null;row._dlBlob=null;row._outFmt='json';
-  row.querySelector('.js-rm').onclick=()=>{row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);};
+  row._u8=u8;row._fn=file.name;row._mime=file.type||'application/octet-stream';row._jd=null;row._dlBlob=null;row._outFmt='json';row._blobUrl=url;
+  const encTog=row.querySelector('.js-enc-tog'),encPass=row.querySelector('.js-enc-pass');
+  encTog.onchange=()=>{encPass.disabled=!encTog.checked;if(encTog.checked)encPass.focus();};
+  row.querySelector('.js-rm').onclick=()=>{
+    if(row._blobUrl) URL.revokeObjectURL(row._blobUrl);
+    row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';
+    setTimeout(()=>row.remove(),180);
+  };
   row.querySelector('.js-conv').onclick=()=>convertGenericRow(row,id);
   row.querySelector('.js-cp').onclick=async()=>{
     if(!row._dlBlob)return;
@@ -587,6 +637,18 @@ async function convertGenericRow(row,id){
     displaySize=jsonStr.length;
     const mp=50000;previewStr=jsonStr.length>mp?jsonStr.substring(0,mp)+'\n\n… ['+fmtSz(jsonStr.length-mp)+' more]':jsonStr;
   }
+
+  const encTog=row.querySelector('.js-enc-tog').checked, pass=row.querySelector('.js-enc-pass').value;
+  if(encTog){
+    if(!pass){toast('Enter password to encrypt','error');btn.disabled=false;btn.textContent='Encode';hideProgress(row);return;}
+    const buf=await fileBlob.arrayBuffer();
+    const enc=await encryptData(new Uint8Array(buf), pass);
+    const envObj={format:'pixson-encrypted-v1', salt:enc.salt, iv:enc.iv, data:enc.data, originalFmt:outFmt, originalName:row._fn};
+    const envJson=JSON.stringify(envObj,null,2);
+    fileBlob=new Blob([envJson],{type:'application/json'});
+    fileExt='enc.json'; displaySize=fileBlob.size; previewStr=envJson.substring(0,500)+'\n\n... [Encrypted Payload]';
+  }
+
   row._dlBlob=fileBlob;row._dlName=row._fn+'.pixson.'+fileExt;row._outFmt=outFmt;
   hideProgress(row);
   const res=row.querySelector('#res-'+id);res.classList.add('visible');
@@ -594,6 +656,7 @@ async function convertGenericRow(row,id){
   res.querySelector('.js-js').textContent=fmtSz(displaySize);
   res.querySelector('.js-jp').textContent=previewStr;
   btn.disabled=false;btn.textContent='Encode';
+  if(typeof updateBulkUI==='function') updateBulkUI();
   toast(fmtSz(row._u8.length)+' → '+fmtSz(displaySize)+' ('+((displaySize/row._u8.length)*100).toFixed(0)+'%)','success');
 }
 
@@ -657,6 +720,18 @@ async function convertImgRow(row,id){
     previewStr = jsonStr.length>maxPreview?jsonStr.substring(0,maxPreview)+'\n\n… ['+fmtSz(jsonStr.length-maxPreview)+' more bytes — click Download to get the full file]':jsonStr;
   }
 
+  const encTog=row.querySelector('.js-enc-tog').checked, pass=row.querySelector('.js-enc-pass').value;
+  if(encTog){
+    if(!pass){toast('Enter password to encrypt','error');btn.disabled=false;btn.textContent='Convert';hideProgress(row);return;}
+    const buf=await fileBlob.arrayBuffer();
+    const encResult=await encryptData(new Uint8Array(buf), pass);
+    const envObj={format:'pixson-encrypted-v1', salt:encResult.salt, iv:encResult.iv, data:encResult.data, originalFmt:outFmt, originalName:row._fn};
+    const envJson=JSON.stringify(envObj,null,2);
+    fileBlob=new Blob([envJson],{type:'application/json'});
+    fileExt='enc.json'; displaySize=fileBlob.size; previewStr=envJson.substring(0,500)+'\n\n... [Encrypted Payload]';
+    displayEnc='AES-256';
+  }
+
   row._dlBlob = fileBlob;
   row._dlName = row._fn.replace(/\.[^/.]+$/,'')+'-pixson.'+fileExt;
   row._outFmt = outFmt;
@@ -670,6 +745,7 @@ async function convertImgRow(row,id){
   btn.disabled=false;btn.textContent='Convert';
   hideProgress(row);
   toast((cw*ch).toLocaleString()+' px → '+fmtSz(displaySize)+' ('+displayEnc+')','success');
+  if(typeof updateBulkUI==='function') updateBulkUI();
 }
 
 // Drop/click/paste
@@ -691,6 +767,13 @@ document.onpaste=e=>{
 
 async function processDataBuffer(u8, name, id, sizeOverride) {
   const sizeStr = fmtSz(sizeOverride || u8.length);
+  try {
+    const text = new TextDecoder().decode(u8);
+    if(text.includes('pixson-encrypted-v1')){
+      const obj = JSON.parse(text);
+      if(obj.format === 'pixson-encrypted-v1') { makeEncryptedDecodeRow(id, name, sizeStr, obj); return; }
+    }
+  } catch(e) {}
   if(u8.length>=4 && u8[0]===80 && u8[1]===88 && u8[2]===69 && u8[3]===78){
     const parsed = parsePxnBinary(u8);
     const encType = parsed.type === 2 ? 'pixenultra' : 'pixen';
@@ -773,6 +856,41 @@ function makeDataRow(id,name,sizeStr,obj,encBadge){
   toast('Added: '+name,'success',1800);
 }
 
+// ─── Encrypted Decode Row ────────────────────────────────────
+function makeEncryptedDecodeRow(id,name,sizeStr,obj){
+  const row=document.createElement('div');row.className='row-card';row.id='jr-'+id;
+  row.innerHTML=
+    '<div class="row-top">'+
+      '<div class="row-thumb" style="display:flex;align-items:center;justify-content:center;font-size:2rem;background:var(--bg-input)">🔒</div>'+
+      '<div class="row-info"><div class="row-name" title="'+name+'">'+name+'</div>'+
+        '<div class="row-meta"><span class="badge badge-enc">ENCRYPTED</span><span class="badge badge-size">'+sizeStr+'</span></div></div>'+
+      '<div class="row-actions"><button class="btn-remove js-rm">✕</button></div>'+
+    '</div>'+
+    '<div class="row-options" style="border-top:none;padding-top:0">'+
+      '<div class="option-group" style="flex:1"><input type="password" class="option-input js-dec-pass" placeholder="Enter password to decrypt" style="width:100%"></div>'+
+      '<button class="btn btn-sm btn-primary js-dec">Decrypt</button>'+
+    '</div>'+
+    '<div class="row-progress"><div class="row-progress-bar"></div></div>';
+  jsonQueue.appendChild(row);
+  row._done=false;
+  row.querySelector('.js-rm').onclick=()=>{row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);};
+  row.querySelector('.js-dec').onclick=async()=>{
+    const pass=row.querySelector('.js-dec-pass').value;
+    if(!pass){toast('Please enter password','error');return;}
+    const btn=row.querySelector('.js-dec');btn.disabled=true;btn.textContent='Decrypting...';
+    showProgress(row); await sleep(50);
+    try{
+      const decryptedU8=await decryptData(obj, pass);
+      hideProgress(row); toast('Decrypted successfully!','success');
+      row.remove();
+      await processDataBuffer(decryptedU8, name.replace('.enc.json',''), id);
+    }catch(err){
+      hideProgress(row); toast(err.message,'error');
+      btn.disabled=false;btn.textContent='Decrypt';
+    }
+  };
+}
+
 // ─── Generic File Decode Row ─────────────────────────────────
 function makeGenericDecodeRow(id,name,sizeStr,obj){
   const icon=getFileIcon(obj.filename||'file');
@@ -785,10 +903,18 @@ function makeGenericDecodeRow(id,name,sizeStr,obj){
       '<div class="row-actions"><button class="btn btn-sm btn-primary js-recon">Decode</button>'+
         '<button class="btn btn-sm btn-accent js-dli" disabled>Download</button>'+
         '<button class="btn-remove js-rm">✕</button></div>'+
+    '</div>'+
+    '<div class="row-progress"><div class="row-progress-bar"></div></div>'+
+    '<div class="row-result" id="gres-'+id+'">'+
+      '<div class="generic-preview-wrap" id="gprev-'+id+'"></div>'+
     '</div>';
   jsonQueue.appendChild(row);
   row._obj=obj;row._done=false;
-  row.querySelector('.js-rm').onclick=()=>{row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);};
+  row.querySelector('.js-rm').onclick=()=>{
+    if(row._blobUrl) URL.revokeObjectURL(row._blobUrl);
+    row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';
+    setTimeout(()=>row.remove(),180);
+  };
   row.querySelector('.js-recon').onclick=async()=>{
     const btn=row.querySelector('.js-recon');btn.disabled=true;btn.textContent='Decoding…';
     showProgress(row);
@@ -798,10 +924,32 @@ function makeGenericDecodeRow(id,name,sizeStr,obj){
       const raw=await decompressBytes(compressed);
       const blob=new Blob([raw],{type:obj.mimeType||'application/octet-stream'});
       row._blob=blob;row._done=true;
+      
+      const url=URL.createObjectURL(blob);
+      row._blobUrl=url;
+      const mime=obj.mimeType||'';
+      let html='';
+      if(mime.startsWith('audio/')){
+        html='<audio controls src="'+url+'" style="width:100%"></audio>';
+      }else if(mime.startsWith('video/')){
+        html='<video controls src="'+url+'" style="width:100%;max-height:400px;border-radius:6px"></video>';
+      }else if(mime==='application/pdf'){
+        html='<iframe src="'+url+'" style="width:100%;height:500px;border:none;border-radius:6px;background:#fff"></iframe>';
+      }else if(mime.startsWith('text/')||mime==='application/json'||mime==='application/javascript'||mime==='text/css'){
+        const text=new TextDecoder().decode(raw);
+        const maxL=50000;const disp=text.length>maxL?text.substring(0,maxL)+'\n\n... [truncated]':text;
+        html='<pre class="json-preview">'+disp.replace(/</g,'&lt;')+'</pre>';
+      }else{
+        html='<div style="text-align:center;padding:20px;color:var(--text-3);font-size:.85rem">Preview not available for this file type. Click Download to open.</div>';
+      }
+      row.querySelector('#gprev-'+id).innerHTML=html;
+      row.querySelector('#gres-'+id).classList.add('visible');
+
       row.querySelector('.js-dli').disabled=false;
       hideProgress(row);
       btn.textContent='Decoded ✓';
       toast('Decoded: '+(obj.filename||'file')+' ('+fmtSz(raw.length)+')','success');
+      if(typeof updateBulkUI==='function') updateBulkUI();
     }catch(err){hideProgress(row);toast('Decode error: '+err.message,'error');btn.disabled=false;btn.textContent='Decode';}
   };
   row.querySelector('.js-dli').onclick=()=>{if(!row._blob)return;dlBlob(row._blob,obj.filename||'decoded-file');toast('Downloaded!','success');};
@@ -867,6 +1015,7 @@ async function reconRow(row,id){
   btn.disabled=false;btn.textContent='Reconstruct';
   hideProgress(row);
   toast('Reconstructed: '+w+'×'+h,'success');
+  if(typeof updateBulkUI==='function') updateBulkUI();
 }
 
 // Drop/click for Data
@@ -912,6 +1061,91 @@ addPastedBtn.onclick = async () => {
     toast('Error processing: ' + err.message, 'error');
   }
   pasteOverlay.classList.remove('active');
+};
+
+// ─── Simple Uncompressed ZIP Generator ──────────────────────
+const crcTable=new Uint32Array(256);
+for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=(c&1)?0xedb88320^(c>>>1):c>>>1;crcTable[i]=c;}
+function getCrc(u8){let c=0xffffffff;for(let i=0;i<u8.length;i++)c=crcTable[(c^u8[i])&0xff]^(c>>>8);return(c^0xffffffff)>>>0;}
+
+function createZip(files) {
+  const enc=new TextEncoder(); let cdOffset=0, centralDir=[], localFiles=[];
+  for (const f of files) {
+    const nameBuf=enc.encode(f.name), u8=f.u8, crc=getCrc(u8), size=u8.length;
+    let lh=new Uint8Array(30+nameBuf.length), ldv=new DataView(lh.buffer);
+    ldv.setUint32(0,0x04034b50,true); ldv.setUint16(4,10,true); ldv.setUint32(14,crc,true); ldv.setUint32(18,size,true); ldv.setUint32(22,size,true); ldv.setUint16(26,nameBuf.length,true); lh.set(nameBuf,30);
+    
+    let cd=new Uint8Array(46+nameBuf.length), cdv=new DataView(cd.buffer);
+    cdv.setUint32(0,0x02014b50,true); cdv.setUint16(4,20,true); cdv.setUint16(6,10,true); cdv.setUint32(16,crc,true); cdv.setUint32(20,size,true); cdv.setUint32(24,size,true); cdv.setUint16(28,nameBuf.length,true); cdv.setUint32(42,cdOffset,true); cd.set(nameBuf,46);
+    
+    localFiles.push(lh, u8); centralDir.push(cd); cdOffset += lh.length + u8.length;
+  }
+  let cdSize = centralDir.reduce((a,b)=>a+b.length, 0);
+  let eocd = new Uint8Array(22), edv = new DataView(eocd.buffer);
+  edv.setUint32(0,0x06054b50,true); edv.setUint16(8,files.length,true); edv.setUint16(10,files.length,true); edv.setUint32(12,cdSize,true); edv.setUint32(16,cdOffset,true);
+  
+  const total = cdOffset + cdSize + eocd.length, out = new Uint8Array(total); let pos = 0;
+  for (const b of localFiles) { out.set(b, pos); pos += b.length; }
+  for (const b of centralDir) { out.set(b, pos); pos += b.length; }
+  out.set(eocd, pos); return out;
+}
+
+// ─── Bulk Operations UI & Handlers ──────────────────────────
+window.updateBulkUI = function() {
+  const encRows=Array.from(imgQueue.querySelectorAll('.row-card')), decRows=Array.from(jsonQueue.querySelectorAll('.row-card'));
+  if(encRows.length>0){ $('#bulkEncodeBar').style.display='flex'; $('#bulkEncodeCount').textContent=encRows.length; $('#btnDownloadAllEncode').disabled=!encRows.every(r=>r._dlBlob); }
+  else { $('#bulkEncodeBar').style.display='none'; }
+  if(decRows.length>0){ $('#bulkDecodeBar').style.display='flex'; $('#bulkDecodeCount').textContent=decRows.length; $('#btnDownloadAllDecode').disabled=!decRows.every(r=>r._blob||r._dlBlob||(r._done&&r.querySelector('canvas'))); }
+  else { $('#bulkDecodeBar').style.display='none'; }
+};
+const observer = new MutationObserver(updateBulkUI);
+observer.observe(imgQueue, {childList: true}); observer.observe(jsonQueue, {childList: true});
+
+$('#btnClearAllEncode').onclick = () => { imgQueue.innerHTML = ''; };
+$('#btnClearAllDecode').onclick = () => { jsonQueue.innerHTML = ''; };
+
+$('#btnProcessAllEncode').onclick = async () => {
+  const btn=$('#btnProcessAllEncode'); btn.disabled=true; btn.textContent='Processing...';
+  for (const row of Array.from(imgQueue.querySelectorAll('.row-card'))) {
+    if (!row._dlBlob) { if(row.id.startsWith('ir-')) await convertGenericRow(row, row.id.replace('ir-','')); else await convertImgRow(row, row.id.replace('im-','')); }
+  }
+  btn.disabled=false; btn.textContent='Encode All';
+};
+
+$('#btnProcessAllDecode').onclick = async () => {
+  const btn=$('#btnProcessAllDecode'); btn.disabled=true; btn.textContent='Processing...';
+  for (const row of Array.from(jsonQueue.querySelectorAll('.row-card'))) {
+    if (!row._done) { const b = row.querySelector('.js-recon'); if (b) { b.click(); await sleep(100); while (!row._done && document.body.contains(row)) await sleep(100); } }
+  }
+  btn.disabled=false; btn.textContent='Decode All';
+};
+
+$('#btnDownloadAllEncode').onclick = async () => {
+  const rows = Array.from(imgQueue.querySelectorAll('.row-card')).filter(r => r._dlBlob);
+  if(!rows.length) return;
+  const files = [];
+  for (const row of rows) { const buf = await row._dlBlob.arrayBuffer(); files.push({name: row._dlName, u8: new Uint8Array(buf)}); }
+  dlBlob(new Blob([createZip(files)], {type:'application/zip'}), 'pixson_encoded.zip');
+};
+
+$('#btnDownloadAllDecode').onclick = async () => {
+  const rows = Array.from(jsonQueue.querySelectorAll('.row-card')).filter(r => r._done || r._dlBlob || r._blob);
+  if(!rows.length) return;
+  const files = [];
+  for (const row of rows) {
+    let u8, name;
+    if (row._blob) { const buf=await row._blob.arrayBuffer(); u8=new Uint8Array(buf); name=row._obj?.filename||'decoded-file'; }
+    else if (row._dlBlob) { const buf=await row._dlBlob.arrayBuffer(); u8=new Uint8Array(buf); name=row._obj?.filename||'decoded-file'; }
+    else {
+      const cvs=row.querySelector('canvas'); if(!cvs) continue;
+      const fmt=row.querySelector('.js-outfmt').value, mime=fmt==='jpeg'?'image/jpeg':fmt==='webp'?'image/webp':'image/png';
+      const ext=fmt==='jpeg'?'jpg':fmt;
+      const blob=await new Promise(r => cvs.toBlob(r, mime, 1.0)), buf=await blob.arrayBuffer();
+      u8=new Uint8Array(buf); name=(row._name||'reconstructed').replace(/\.(json|pxn|gz)$/i,'')+'.'+ext;
+    }
+    files.push({name, u8});
+  }
+  dlBlob(new Blob([createZip(files)], {type:'application/zip'}), 'pixson_decoded.zip');
 };
 
 })();
