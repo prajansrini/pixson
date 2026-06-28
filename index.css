@@ -187,6 +187,19 @@ body{font-family:'Inter',sans-serif;background:var(--bg-body);color:var(--text-1
 /* ===== Footer ===== */
 .footer{position:relative;z-index:10;text-align:center;padding:32px 20px;color:var(--text-3);font-size:.76rem}
 
+/* ===== Progress Bar ===== */
+.row-progress{height:3px;width:100%;background:rgba(128,128,128,0.08);overflow:hidden;display:none}
+.row-progress.active{display:block}
+.row-progress-bar{height:100%;width:30%;background:var(--grad-secondary);border-radius:3px;animation:progSlide 1.2s ease-in-out infinite}
+@keyframes progSlide{0%{transform:translateX(-100%);width:30%}50%{width:50%}100%{transform:translateX(400%);width:30%}}
+
+/* ===== Paste Loading Overlay ===== */
+.json-paste-area{position:relative}
+.paste-overlay{position:absolute;inset:0;z-index:5;display:none;align-items:center;justify-content:center;gap:10px;background:var(--bg-card);border-radius:14px;flex-direction:column}
+.paste-overlay.active{display:flex}
+.paste-spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+.paste-label{font-size:.82rem;color:var(--text-2);font-weight:500}
+
 /* ===== Responsive ===== */
 @media(max-width:600px){
   .logo-text{font-size:1.6rem}

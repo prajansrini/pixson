@@ -7,7 +7,7 @@ const tabI=$('#tabImg2Json'),tabJ=$('#tabJson2Img'),tabInd=$('#tabIndicator');
 const panelI=$('#panelImg2Json'),panelJ=$('#panelJson2Img');
 const imgDrop=$('#imgDropZone'),imgInput=$('#imgFileInput'),imgQueue=$('#imageQueue');
 const jsonDrop=$('#jsonDropZone'),jsonInput=$('#jsonFileInput'),jsonText=$('#jsonTextInput');
-const addPastedBtn=$('#addPastedJson'),jsonQueue=$('#jsonQueue');
+const addPastedBtn=$('#addPastedJson'),jsonQueue=$('#jsonQueue'),pasteOverlay=$('#pasteOverlay');
 const toasts=$('#toastContainer'),themeBtn=$('#themeToggle');
 
 let imgCtr=0, jsonCtr=0;
@@ -49,6 +49,8 @@ function dlBlob(b,n){const u=URL.createObjectURL(b),a=document.createElement('a'
 function c2h(c){return c.toString(16).padStart(2,'0');}
 function rgbHex(r,g,b){return c2h(r)+c2h(g)+c2h(b);}
 function rgbInt(r,g,b){return(r<<16)|(g<<8)|b;}
+function showProgress(row){const p=row.querySelector('.row-progress');if(p)p.classList.add('active');}
+function hideProgress(row){const p=row.querySelector('.row-progress');if(p)p.classList.remove('active');}
 
 // ─── Encoding ───────────────────────────────────────────────
 const ENCS=[
@@ -478,6 +480,7 @@ function makeImgRow(id,file,imgEl,dataUrl){
       '<div class="option-group"><label class="option-label">Encoding</label><select class="option-select js-enc">'+encOptHTML()+'</select></div>'+
       '<div class="option-group"><label class="option-label">Container Format</label><select class="option-select js-fmt"><option value="json">JSON Text (.json)</option><option value="gz">GZipped JSON (.json.gz)</option><option value="pxn">PXN Binary (.pxn)</option></select></div>'+
     '</div>'+
+    '<div class="row-progress"><div class="row-progress-bar"></div></div>'+
     '<div class="row-result" id="res-'+id+'">'+
       '<div class="row-result-header"><h4>JSON Preview</h4><div class="card-actions">'+
         '<span class="badge badge-enc js-eb"></span><span class="badge badge-size js-js"></span>'+
@@ -492,6 +495,7 @@ function makeImgRow(id,file,imgEl,dataUrl){
   origTog.onchange=()=>{maxIn.disabled=origTog.checked;};
   row.querySelector('.js-rm').onclick=()=>{row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);};
   row.querySelector('.js-conv').onclick=()=>convertImgRow(row,id);
+  showProgress(row);setTimeout(()=>hideProgress(row),300);
   
   row.querySelector('.js-cp').onclick=async()=>{
     if(!row._dlBlob)return;
@@ -539,6 +543,7 @@ function makeGenericRow(id,file,u8){
     '<div class="row-options">'+
       '<div class="option-group"><label class="option-label">Container</label><select class="option-select js-fmt"><option value="json">JSON Text (.json)</option><option value="gz">GZipped JSON (.json.gz)</option></select></div>'+
     '</div>'+
+    '<div class="row-progress"><div class="row-progress-bar"></div></div>'+
     '<div class="row-result" id="res-'+id+'">'+
       '<div class="row-result-header"><h4>Output Preview</h4><div class="card-actions">'+
         '<span class="badge badge-enc js-eb"></span><span class="badge badge-size js-js"></span>'+
@@ -565,6 +570,7 @@ function makeGenericRow(id,file,u8){
 async function convertGenericRow(row,id){
   const outFmt=row.querySelector('.js-fmt').value;
   const btn=row.querySelector('.js-conv');btn.disabled=true;btn.textContent='Encoding…';
+  showProgress(row);
   await sleep(10);
   const compressed=await compressBytes(row._u8);
   const b64=u8ToB64(compressed);
@@ -582,6 +588,7 @@ async function convertGenericRow(row,id){
     const mp=50000;previewStr=jsonStr.length>mp?jsonStr.substring(0,mp)+'\n\n… ['+fmtSz(jsonStr.length-mp)+' more]':jsonStr;
   }
   row._dlBlob=fileBlob;row._dlName=row._fn+'.pixson.'+fileExt;row._outFmt=outFmt;
+  hideProgress(row);
   const res=row.querySelector('#res-'+id);res.classList.add('visible');
   res.querySelector('.js-eb').textContent='GZIP+B64';
   res.querySelector('.js-js').textContent=fmtSz(displaySize);
@@ -599,6 +606,7 @@ async function convertImgRow(row,id){
   if (outFmt === 'pxn' && enc !== 'pixenultra') enc = 'pixen';
   
   const btn=row.querySelector('.js-conv');btn.disabled=true;btn.textContent='Converting…';
+  showProgress(row);
   await sleep(10);
 
   let cw=imgEl.naturalWidth,ch=imgEl.naturalHeight;
@@ -660,6 +668,7 @@ async function convertImgRow(row,id){
   res.querySelector('.js-jp').textContent=previewStr;
 
   btn.disabled=false;btn.textContent='Convert';
+  hideProgress(row);
   toast((cw*ch).toLocaleString()+' px → '+fmtSz(displaySize)+' ('+displayEnc+')','success');
 }
 
@@ -743,6 +752,7 @@ function makeDataRow(id,name,sizeStr,obj,encBadge){
         '<button class="btn btn-sm btn-accent js-dli" disabled>Download</button>'+
         '<button class="btn-remove js-rm">✕</button></div>'+
     '</div>'+
+    '<div class="row-progress"><div class="row-progress-bar"></div></div>'+
     '<div class="row-result" id="jres-'+id+'">'+
       '<div class="row-preview-wrap checker"><canvas id="jcvs-'+id+'"></canvas></div>'+
     '</div>';
@@ -781,15 +791,18 @@ function makeGenericDecodeRow(id,name,sizeStr,obj){
   row.querySelector('.js-rm').onclick=()=>{row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s';setTimeout(()=>row.remove(),180);};
   row.querySelector('.js-recon').onclick=async()=>{
     const btn=row.querySelector('.js-recon');btn.disabled=true;btn.textContent='Decoding…';
+    showProgress(row);
     try{
+      await sleep(10);
       const compressed=b64ToU8(obj.data);
       const raw=await decompressBytes(compressed);
       const blob=new Blob([raw],{type:obj.mimeType||'application/octet-stream'});
       row._blob=blob;row._done=true;
       row.querySelector('.js-dli').disabled=false;
+      hideProgress(row);
       btn.textContent='Decoded ✓';
       toast('Decoded: '+(obj.filename||'file')+' ('+fmtSz(raw.length)+')','success');
-    }catch(err){toast('Decode error: '+err.message,'error');btn.disabled=false;btn.textContent='Decode';}
+    }catch(err){hideProgress(row);toast('Decode error: '+err.message,'error');btn.disabled=false;btn.textContent='Decode';}
   };
   row.querySelector('.js-dli').onclick=()=>{if(!row._blob)return;dlBlob(row._blob,obj.filename||'decoded-file');toast('Downloaded!','success');};
   toast('Added: '+(obj.filename||name),'success',1800);
@@ -798,6 +811,7 @@ function makeGenericDecodeRow(id,name,sizeStr,obj){
 async function reconRow(row,id){
   const obj=row._obj,w=obj.width,h=obj.height,enc=obj.encoding||'hex';
   const btn=row.querySelector('.js-recon');btn.disabled=true;btn.textContent='Working…';
+  showProgress(row);
   await sleep(10);
 
   const cvs=row.querySelector('#jcvs-'+id);
@@ -851,6 +865,7 @@ async function reconRow(row,id){
   row.querySelector('.js-dli').disabled=false;
   row._done=true;
   btn.disabled=false;btn.textContent='Reconstruct';
+  hideProgress(row);
   toast('Reconstructed: '+w+'×'+h,'success');
 }
 
@@ -861,12 +876,42 @@ jsonDrop.ondragover=e=>{e.preventDefault();jsonDrop.classList.add('drag-over');}
 jsonDrop.ondragleave=()=>jsonDrop.classList.remove('drag-over');
 jsonDrop.ondrop=e=>{e.preventDefault();jsonDrop.classList.remove('drag-over');if(e.dataTransfer.files.length)addDataFiles(e.dataTransfer.files);};
 
-// Paste JSON text button
-addPastedBtn.onclick=()=>{
-  const t=jsonText.value.trim();
-  if(!t){toast('Paste JSON first','error');return;}
-  addJsonFromText(t);
-  jsonText.value='';
+// ─── Buffered paste system (prevents crash on large text) ───
+let _pastedBuffer = null;
+
+jsonText.addEventListener('paste', e => {
+  const text = e.clipboardData?.getData('text');
+  if (!text || text.length < 50000) return; // small pastes go directly to textarea
+  e.preventDefault(); // BLOCK the browser from inserting megabytes into DOM
+  _pastedBuffer = text;
+  pasteOverlay.classList.add('active');
+  // Use rAF to let the overlay render before we touch the textarea
+  requestAnimationFrame(() => {
+    jsonText.value = '[Buffered ' + fmtSz(text.length) + ' of data — click "Add to queue" to process]';
+    jsonText.disabled = true;
+    pasteOverlay.classList.remove('active');
+    toast('Buffered ' + fmtSz(text.length) + ' of pasted data', 'success');
+  });
+});
+
+addPastedBtn.onclick = async () => {
+  const text = _pastedBuffer || jsonText.value.trim();
+  if (!text || text.startsWith('[Buffered')) {
+    if (!_pastedBuffer) { toast('Paste data first', 'error'); return; }
+  }
+  const data = _pastedBuffer || text;
+  _pastedBuffer = null;
+  jsonText.value = '';
+  jsonText.disabled = false;
+  pasteOverlay.classList.add('active');
+  // Yield to let overlay render
+  await sleep(50);
+  try {
+    await addJsonFromText(data);
+  } catch (err) {
+    toast('Error processing: ' + err.message, 'error');
+  }
+  pasteOverlay.classList.remove('active');
 };
 
 })();
