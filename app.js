@@ -27,6 +27,38 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+function customPrompt(title, btnText = 'OK') {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('promptModal');
+    if(!modal) return resolve(null);
+    const titleEl = document.getElementById('promptTitle');
+    const inputEl = document.getElementById('promptInput');
+    const btnCancel = document.getElementById('promptCancel');
+    const btnOk = document.getElementById('promptOk');
+    
+    titleEl.textContent = title;
+    btnOk.textContent = btnText;
+    inputEl.value = '';
+    
+    modal.classList.add('active');
+    setTimeout(()=>inputEl.focus(), 100);
+    
+    const cleanup = () => {
+      modal.classList.remove('active');
+      btnCancel.onclick = null;
+      btnOk.onclick = null;
+      inputEl.onkeydown = null;
+    };
+    
+    btnCancel.onclick = () => { cleanup(); resolve(null); };
+    btnOk.onclick = () => { cleanup(); resolve(inputEl.value); };
+    inputEl.onkeydown = (e) => {
+      if (e.key === 'Enter') { cleanup(); resolve(inputEl.value); }
+      if (e.key === 'Escape') { cleanup(); resolve(null); }
+    };
+  });
+}
+
 function getImgRowState(r){
   if(!r)return'';
   return JSON.stringify({
@@ -34,8 +66,6 @@ function getImgRowState(r){
     m:r.querySelector('.js-maxdim').value,
     e:r.querySelector('.js-enc').value,
     f:r.querySelector('.js-fmt').value,
-    st:r.querySelector('.js-stego-tog').checked,
-    sx:r._stegoPayload||r.querySelector('.js-stego-txt').value,
     et:r.querySelector('.js-enc-tog').checked,
     ep:r.querySelector('.js-enc-pass').value
   });
@@ -712,8 +742,6 @@ function makeImgRow(id,file,imgEl,dataUrl){
       '<div class="option-group"><label class="option-label">Max Dimensions</label><input type="number" class="option-input js-maxdim" value="256" min="1" max="4096" disabled></div>'+
       '<div class="option-group"><label class="option-label">Encoding</label><select class="option-select js-enc">'+encOptHTML()+'</select></div>'+
       '<div class="option-group"><label class="option-label">Container Format</label><select class="option-select js-fmt"><option value="json">JSON Text (.json)</option><option value="gz">GZipped JSON (.json.gz)</option><option value="pxsn">PXN Binary (.pxsn)</option></select></div>'+
-      '<div class="option-group"><label class="option-label">Steganography</label><label class="toggle-switch"><input type="checkbox" class="js-stego-tog"><span class="toggle-slider"></span></label></div>'+
-      '<div class="option-group"><label class="option-label">Secret Text</label><div style="display:flex;gap:4px;"><input type="text" class="option-input js-stego-txt" placeholder="Type here..." disabled style="width:100px;"><button class="btn btn-sm btn-ghost js-stego-file-btn" disabled title="Upload Text File" style="padding:0 8px;">📄</button><input type="file" accept="text/plain,.txt" class="js-stego-file" style="display:none"></div></div>'+
       '<div class="option-group"><label class="option-label">Encrypt</label><label class="toggle-switch"><input type="checkbox" class="js-enc-tog"><span class="toggle-slider"></span></label></div>'+
       '<div class="option-group"><label class="option-label">Password</label><input type="password" class="option-input js-enc-pass" placeholder="Secret..." disabled></div>'+
     '</div>'+
@@ -735,27 +763,6 @@ function makeImgRow(id,file,imgEl,dataUrl){
   const origTog=row.querySelector('.js-orig'),maxIn=row.querySelector('.js-maxdim'),encTog=row.querySelector('.js-enc-tog'),encPass=row.querySelector('.js-enc-pass');
   origTog.onchange=()=>{maxIn.disabled=origTog.checked;};
   encTog.onchange=()=>{encPass.disabled=!encTog.checked;if(encTog.checked)encPass.focus();};
-  
-  const stegoTog=row.querySelector('.js-stego-tog'),stegoTxt=row.querySelector('.js-stego-txt');
-  const stegoBtn=row.querySelector('.js-stego-file-btn'),stegoFile=row.querySelector('.js-stego-file');
-  stegoTog.onchange=()=>{
-    const d=!stegoTog.checked; stegoTxt.disabled=d; stegoBtn.disabled=d;
-    if(stegoTog.checked) stegoTxt.focus();
-  };
-  stegoTxt.oninput=()=>{ row._stegoPayload = null; };
-  stegoBtn.onclick=()=>stegoFile.click();
-  stegoFile.onchange=(e)=>{
-    if(!e.target.files[0]) return;
-    const f=e.target.files[0];
-    const reader=new FileReader();
-    reader.onload=(evt)=>{ 
-      stegoTxt.value=`[File: ${f.name}]`; 
-      row._stegoPayload = evt.target.result;
-      toast('Loaded '+f.name,'success'); 
-    };
-    reader.readAsText(f);
-    stegoFile.value='';
-  };
   
   row.querySelector('.js-rm').onclick=()=>{
     removeFileFromDB('encodeFiles', id);
@@ -974,7 +981,7 @@ async function convertGenericRow(row,id){
   }
 
   const encTog=row.querySelector('.js-enc-tog').checked, pass=row.querySelector('.js-enc-pass').value;
-  if(encTog && outFmt !== 'stego'){
+  if(encTog){
     if(!pass){toast('Enter password to encrypt','error');btn.disabled=false;btn.textContent='Encode';hideProgress(row);return;}
     const buf=await fileBlob.arrayBuffer();
     const enc=await encryptData(new Uint8Array(buf), pass);
@@ -1031,57 +1038,6 @@ async function convertImgRow(row,id){
   const cvs=document.createElement('canvas');cvs.width=cw;cvs.height=ch;
   const ctx=cvs.getContext('2d');ctx.drawImage(imgEl,0,0,cw,ch);
   
-  const stegoTog = row.querySelector('.js-stego-tog').checked, stegoTxt = row.querySelector('.js-stego-txt').value;
-  
-  if (stegoTog) {
-    const payloadStr = row._stegoPayload || stegoTxt;
-    if (!payloadStr) { toast('Enter Secret Text or upload a file!', 'error'); btn.disabled = false; btn.textContent = 'Encode'; hideProgress(row); return; }
-    
-    // Convert secret text to binary
-    const textBytes = new TextEncoder().encode(payloadStr);
-    const finalPayload = new Uint8Array(9 + textBytes.length);
-    finalPayload[0]=80; finalPayload[1]=88; finalPayload[2]=83; finalPayload[3]=84; // PXST
-    finalPayload[4]=0; // No encryption flag for this text (keep it simple)
-    const len = textBytes.length;
-    finalPayload[5] = (len >>> 24) & 255; finalPayload[6] = (len >>> 16) & 255; finalPayload[7] = (len >>> 8) & 255; finalPayload[8] = len & 255;
-    finalPayload.set(textBytes, 9);
-    
-    const imgData = ctx.getImageData(0, 0, cw, ch); const pixels = imgData.data;
-    const maxBytes = Math.floor((pixels.length / 4 * 3) / 8);
-    if (finalPayload.length > maxBytes) { toast(`Text too long! Max ${fmtSz(maxBytes)} chars for this image.`, 'error'); hideProgress(row); btn.disabled = false; btn.textContent = 'Encode'; return; }
-    
-    let bitIdx = 0; const totalBits = finalPayload.length * 8;
-    for (let i = 0; i < pixels.length && bitIdx < totalBits; i += 4) {
-      for (let c = 0; c < 3; c++) {
-        if (bitIdx < totalBits) {
-          const byte = finalPayload[Math.floor(bitIdx / 8)];
-          const bit = (byte >>> (7 - (bitIdx % 8))) & 1;
-          pixels[i + c] = (pixels[i + c] & ~1) | bit;
-          bitIdx++;
-        }
-      }
-      pixels[i + 3] = 255;
-    }
-    ctx.putImageData(imgData, 0, 0);
-    const stegoBlob = await new Promise(res => cvs.toBlob(res, 'image/png'));
-    
-    row._dlBlob = stegoBlob;
-    row._dlName = row._fn.replace(/\.[^/.]+$/,'')+'_secret.png';
-    row._outFmt = 'png';
-    
-    hideProgress(row);
-    const res=row.querySelector('#res-'+id); res.classList.add('visible');
-    res.querySelector('.js-eb').textContent='Steganography';
-    res.querySelector('.js-js').textContent=fmtSz(stegoBlob.size);
-    res.querySelector('.js-jp').textContent=`[STEGANOGRAPHY]\nSecret message successfully embedded into ${cw}x${ch} PNG.\nOutput is a completely normal PNG image.`;
-    
-    const qrBtn = row.querySelector('.js-qr-btn'); if(qrBtn) qrBtn.style.display = 'none';
-    btn.disabled=false;btn.textContent='Encode';
-    if(typeof updateBulkUI==='function') updateBulkUI();
-    toast('Secret Text Hidden!', 'success');
-    return;
-  }
-  
   let encoded;
   if (enc === 'webp') {
     const blob = await new Promise(r => cvs.toBlob(r, 'image/webp', 1.0));
@@ -1125,7 +1081,7 @@ async function convertImgRow(row,id){
   }
 
   const encTog=row.querySelector('.js-enc-tog').checked, pass=row.querySelector('.js-enc-pass').value;
-  if(encTog && outFmt !== 'stego'){
+  if(encTog){
     if(!pass){toast('Enter password to encrypt','error');btn.disabled=false;btn.textContent='Encode';hideProgress(row);return;}
     const buf=await fileBlob.arrayBuffer();
     const encResult=await encryptData(new Uint8Array(buf), pass);
@@ -1186,68 +1142,27 @@ document.onpaste=e=>{
 //  DECODE — Data → File / Image (multi-row)
 // ══════════════════════════════════════════════════════════════
 
+function explodeBundle(obj) {
+  toast(`Exploding ${obj.files.length} files from bundle...`, 'info');
+  for (const f of obj.files) {
+    const fU8 = b64ToU8(f.b64);
+    const fBlob = new Blob([fU8], {type: 'application/octet-stream'});
+    addDataFile(new File([fBlob], f.name));
+  }
+}
+
 async function processDataBuffer(u8, name, id, sizeOverride) {
   const sizeStr = fmtSz(sizeOverride || u8.length);
-  
-  if (u8.length >= 8 && u8[0]===137 && u8[1]===80 && u8[2]===78 && u8[3]===71) {
-    try {
-      const blob = new Blob([u8], {type: 'image/png'});
-      const url = URL.createObjectURL(blob);
-      const img = new Image();
-      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
-      URL.revokeObjectURL(url);
-      
-      const cvs = document.createElement('canvas'); cvs.width = img.width; cvs.height = img.height;
-      const ctx = cvs.getContext('2d'); ctx.drawImage(img, 0, 0);
-      const imgData = ctx.getImageData(0, 0, cvs.width, cvs.height); const pixels = imgData.data;
-      
-      const headerBytes = new Uint8Array(9);
-      let bitIdx = 0;
-      for (let i = 0; i < pixels.length && bitIdx < 72; i += 4) {
-        for (let c = 0; c < 3; c++) {
-          if (bitIdx < 72) { const bit = pixels[i + c] & 1; headerBytes[Math.floor(bitIdx / 8)] |= (bit << (7 - (bitIdx % 8))); bitIdx++; }
-        }
-      }
-      
-      if (headerBytes[0]===80 && headerBytes[1]===88 && headerBytes[2]===83 && headerBytes[3]===84) {
-        const isEnc = headerBytes[4] === 1;
-        const len = (headerBytes[5]<<24) | (headerBytes[6]<<16) | (headerBytes[7]<<8) | headerBytes[8];
-        if (len > 0 && len < 50*1024*1024) {
-          const payload = new Uint8Array(len);
-          bitIdx = 0; const totalBits = len * 8;
-          let pixelIdx = Math.floor(72 / 3) * 4; let cIdx = 72 % 3;
-          for (let i = pixelIdx; i < pixels.length && bitIdx < totalBits; i += 4) {
-            for (let c = cIdx; c < 3; c++) {
-              if (bitIdx < totalBits) { const bit = pixels[i + c] & 1; payload[Math.floor(bitIdx / 8)] |= (bit << (7 - (bitIdx % 8))); bitIdx++; }
-            }
-            cIdx = 0;
-          }
-          if (bitIdx === totalBits) {
-            toast('Hidden payload extracted from PNG!', 'success');
-            if (isEnc && payload.length > 28) {
-              const salt = Array.from(payload.subarray(0, 16)); const iv = Array.from(payload.subarray(16, 28)); const ct = u8ToB64(payload.subarray(28));
-              const envObj = { format:'pixson-encrypted-v1', salt, iv, data:ct, originalFmt: 'pxsn', originalName: 'Hidden Payload' };
-              makeEncryptedDecodeRow(id + '_payload', name, fmtSz(len), envObj);
-              const mockImgObj = { format: 'pixson-file-v1', filename: name, mimeType: 'image/png', originalSize: u8.length, encoding: 'Raw Text', _binaryData: u8 };
-              makeGenericDecodeRow(id, name, sizeStr, mockImgObj);
-            } else {
-              const secretText = new TextDecoder().decode(payload);
-              makeStegoDecodeRow(id, name, u8, secretText, len);
-            }
-            return;
-          }
-        }
-      }
-    } catch(e) { console.error('PNG Parse Error', e); }
-    toast('No hidden payload found in this PNG.', 'info');
-    return;
-  }
 
   try {
     const text = new TextDecoder().decode(u8);
     if(text.includes('pixson-encrypted-v1')){
       const obj = JSON.parse(text);
       if(obj.format === 'pixson-encrypted-v1') { makeEncryptedDecodeRow(id, name, sizeStr, obj); return; }
+    }
+    if(text.includes('pixson-bundle-v1')){
+      const obj = JSON.parse(text);
+      if(obj.format === 'pixson-bundle-v1') { explodeBundle(obj); return; }
     }
   } catch(e) {}
   if(u8.length>=4 && u8[0]===80 && u8[1]===88 && u8[2]===69 && u8[3]===78){
@@ -1265,6 +1180,7 @@ async function processDataBuffer(u8, name, id, sizeOverride) {
   if(u8.length>=2 && u8[0]===0x1f && u8[1]===0x8b){
     const jsonStr = await ungzipJSON(u8);
     const obj = JSON.parse(jsonStr);
+    if(obj.format==='pixson-bundle-v1'){explodeBundle(obj);return;}
     if(obj.format==='pixson-file-v1'){makeGenericDecodeRow(id,name,sizeStr,obj);return;}
     makeDataRow(id, name, sizeStr, obj, (obj.encoding||'hex')+' (GZIP)');
     return;
@@ -1281,6 +1197,7 @@ async function processDataBuffer(u8, name, id, sizeOverride) {
     }
     throw e;
   }
+  if(obj.format==='pixson-bundle-v1'){explodeBundle(obj);return;}
   if(obj.format==='pixson-file-v1'){makeGenericDecodeRow(id,name,sizeStr,obj);return;}
   makeDataRow(id, name, sizeStr, obj, obj.encoding||'hex');
 }
@@ -1324,7 +1241,7 @@ function makeDataRow(id,name,sizeStr,obj,encBadge){
       '<div class="row-thumb" id="jthumb-'+id+'"><canvas width="1" height="1"></canvas></div>'+
       '<div class="row-info"><div class="row-name" title="'+name+'">'+name+'</div>'+
         '<div class="row-meta"><span class="badge badge-dim">'+obj.width+' × '+obj.height+'</span><span class="badge badge-size">'+sizeStr+'</span><span class="badge badge-enc">'+encBadge+'</span></div></div>'+
-      '<div class="row-actions"><button class="btn btn-sm btn-primary js-recon">Reconstruct</button>'+
+      '<div class="row-actions"><button class="btn btn-sm btn-primary js-recon">Decode</button>'+
         '<select class="option-select js-outfmt"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp">WebP Lossless</option></select>'+
         '<button class="btn btn-sm btn-accent js-dli" disabled>Download</button>'+
         '<button class="btn-remove js-rm">✕</button></div>'+
@@ -1357,7 +1274,7 @@ function makeDataRow(id,name,sizeStr,obj,encBadge){
     const mime=fmt==='jpeg'?'image/jpeg':fmt==='webp'?'image/webp':'image/png';
     const ext=fmt==='jpeg'?'jpg':fmt;
     const cvs=row.querySelector('#jcvs-'+id);
-    cvs.toBlob(b=>{if(b){dlBlob(b,'pixson-reconstructed.'+ext);toast('Downloaded!','success');}},mime,1.0); // 1.0 = Highest quality
+    cvs.toBlob(b=>{if(b){dlBlob(b,'pixson-decoded.'+ext);toast('Downloaded!','success');}},mime,1.0); // 1.0 = Highest quality
   };
   toast('Added: '+name,'success',1800);
 }
@@ -1397,42 +1314,7 @@ function makeEncryptedDecodeRow(id,name,sizeStr,obj){
   };
 }
 
-// ─── Steganography Decode Row ─────────────────────────────────
-function makeStegoDecodeRow(id, name, imgU8, secretText, len) {
-  const row = document.createElement('div'); row.className = 'row-card'; row.id = 'jr-'+id;
-  const imgUrl = URL.createObjectURL(new Blob([imgU8], {type: 'image/png'}));
-  
-  row.innerHTML =
-    '<div class="row-top">' +
-      '<div class="row-thumb"><img src="'+imgUrl+'" alt=""></div>' +
-      '<div class="row-info"><div class="row-name" title="'+name+'">'+name+'</div>' +
-        '<div class="row-meta"><span class="badge badge-enc" style="background:var(--accent);color:#000">STEGANOGRAPHY</span><span class="badge badge-size">'+fmtSz(imgU8.length)+'</span><span class="badge badge-dim">Secret: '+fmtSz(len)+'</span></div></div>' +
-      '<div class="row-actions">' +
-        '<button class="btn btn-sm btn-ghost js-cp">Copy Text</button>' +
-        '<button class="btn btn-sm btn-accent js-dli">Download Image</button>' +
-        '<button class="btn-remove js-rm">✕</button></div>' +
-    '</div>' +
-    '<div class="row-result visible">' +
-      '<div class="row-preview-wrap checker"><img src="'+imgUrl+'" class="js-stego-img" style="max-width:100%;max-height:400px;display:block;margin:0 auto;border-radius:4px;cursor:zoom-in;"></div>' +
-      '<div class="row-result-header" style="margin-top:15px; border-top:1px solid var(--border); padding-top:15px;"><h4>Extracted Secret Message</h4></div>' +
-      '<pre class="json-preview" style="margin-top:10px; white-space:pre-wrap;">'+secretText.replace(/</g, '&lt;')+'</pre>' +
-    '</div>';
-  jsonQueue.appendChild(row);
-  
-  row.querySelector('.js-rm').onclick = () => { removeFileFromDB('decodeFiles', id); URL.revokeObjectURL(imgUrl); row.style.cssText='opacity:0;transform:translateY(-6px);transition:all .18s'; setTimeout(()=>row.remove(),180); };
-  row.querySelector('.js-cp').onclick = async () => {
-    try { await navigator.clipboard.writeText(secretText); toast('Copied secret text!', 'success'); }
-    catch { toast('Copy failed', 'error'); }
-  };
-  row.querySelector('.js-dli').onclick = () => {
-    const a = document.createElement('a'); a.href = imgUrl; a.download = name; a.click(); toast('Downloaded image!', 'success');
-  };
-  
-  const thumbImg = row.querySelector('.row-thumb img');
-  const mainImg = row.querySelector('.js-stego-img');
-  if (thumbImg) { thumbImg.style.cursor = 'zoom-in'; thumbImg.onclick = () => openImagePreview(imgUrl); }
-  if (mainImg) mainImg.onclick = () => openImagePreview(imgUrl);
-}
+
 
 // ─── Generic File Decode Row ─────────────────────────────────
 function makeGenericDecodeRow(id,name,sizeStr,obj){
@@ -1503,7 +1385,7 @@ function makeGenericDecodeRow(id,name,sizeStr,obj){
 
       row.querySelector('.js-dli').disabled=false;
       hideProgress(row);
-      btn.textContent='Decoded ✓';
+      btn.textContent='Decode';
       toast('Decoded: '+(obj.filename||'file')+' ('+fmtSz(raw.length)+')','success');
       if(typeof updateBulkUI==='function') updateBulkUI();
     }catch(err){hideProgress(row);toast('Decode error: '+err.message,'error');btn.disabled=false;btn.textContent='Decode';}
@@ -1514,7 +1396,7 @@ function makeGenericDecodeRow(id,name,sizeStr,obj){
 
 async function reconRow(row,id){
   const obj=row._obj,w=obj.width,h=obj.height,enc=obj.encoding||'hex';
-  const btn=row.querySelector('.js-recon');btn.disabled=true;btn.textContent='Working…';
+  const btn=row.querySelector('.js-recon');btn.disabled=true;btn.textContent='Decoding…';
   showProgress(row);
   await sleep(10);
 
@@ -1568,9 +1450,9 @@ async function reconRow(row,id){
   row.querySelector('#jres-'+id).classList.add('visible');
   row.querySelector('.js-dli').disabled=false;
   row._done=true;
-  btn.disabled=false;btn.textContent='Reconstruct';
+  btn.disabled=false;btn.textContent='Decode';
   hideProgress(row);
-  toast('Reconstructed: '+w+'×'+h,'success');
+  toast('Decoded: '+w+'×'+h,'success');
   if(typeof updateBulkUI==='function') updateBulkUI();
 }
 
@@ -1649,7 +1531,12 @@ function createZip(files) {
 // ─── Bulk Operations UI & Handlers ──────────────────────────
 window.updateBulkUI = function() {
   const encRows=Array.from(imgQueue.querySelectorAll('.row-card')), decRows=Array.from(jsonQueue.querySelectorAll('.row-card'));
-  if(encRows.length>0){ $('#bulkEncodeBar').style.display='flex'; $('#bulkEncodeCount').textContent=encRows.length; $('#btnDownloadAllEncode').disabled=!encRows.every(r=>r._dlBlob); }
+  if(encRows.length>0){ 
+    $('#bulkEncodeBar').style.display='flex'; $('#bulkEncodeCount').textContent=encRows.length; 
+    const allDone = encRows.every(r=>r._dlBlob);
+    $('#btnDownloadAllEncode').disabled = !allDone;
+    const bundleBtn = $('#btnBundleAllEncode'); if(bundleBtn) bundleBtn.disabled = !allDone;
+  }
   else { $('#bulkEncodeBar').style.display='none'; }
   if(decRows.length>0){ $('#bulkDecodeBar').style.display='flex'; $('#bulkDecodeCount').textContent=decRows.length; $('#btnDownloadAllDecode').disabled=!decRows.every(r=>r._blob||r._dlBlob||(r._done&&r.querySelector('canvas'))); }
   else { $('#bulkDecodeBar').style.display='none'; }
@@ -1667,6 +1554,43 @@ $('#btnProcessAllEncode').onclick = async () => {
   }
   btn.disabled=false; btn.textContent='Encode All';
 };
+
+const bundleBtn = $('#btnBundleAllEncode');
+if (bundleBtn) {
+  bundleBtn.onclick = async () => {
+    const rows = Array.from(imgQueue.querySelectorAll('.row-card')).filter(r => r._dlBlob);
+    if(!rows.length) return;
+    const pass = await customPrompt('Optional: Enter a password to encrypt this entire bundle', 'Bundle');
+    if (pass === null) return;
+    bundleBtn.disabled=true; bundleBtn.textContent='Bundling...';
+    
+    try {
+      const files = [];
+      for (const row of rows) {
+        const buf = await row._dlBlob.arrayBuffer();
+        files.push({ name: row._dlName, b64: u8ToB64(new Uint8Array(buf)) });
+      }
+      const bundleStr = JSON.stringify({ format: 'pixson-bundle-v1', files });
+      
+      let finalBlob, finalName;
+      if (pass) {
+        const enc = await encryptData(new TextEncoder().encode(bundleStr), pass);
+        const envObj = { format: 'pixson-encrypted-v1', salt: enc.salt, iv: enc.iv, data: enc.data, originalFmt: 'bundle', originalName: 'workspace_bundle' };
+        finalBlob = new Blob([JSON.stringify(envObj)], {type: 'application/json'});
+        finalName = 'workspace.bundle.enc.json';
+      } else {
+        const gzBytes = await gzipJSON(bundleStr);
+        finalBlob = new Blob([gzBytes], {type: 'application/gzip'});
+        finalName = 'workspace.bundle.pxsn';
+      }
+      dlBlob(finalBlob, finalName);
+      toast('Bundle generated successfully!', 'success');
+    } catch(e) {
+      toast('Bundle failed: '+e.message, 'error');
+    }
+    bundleBtn.disabled=false; bundleBtn.textContent='Bundle into 1 File';
+  };
+}
 
 $('#btnProcessAllDecode').onclick = async () => {
   const btn=$('#btnProcessAllDecode'); btn.disabled=true; btn.textContent='Processing...';
@@ -1728,7 +1652,7 @@ $('#btnDownloadAllDecode').onclick = async () => {
       const fmt=row.querySelector('.js-outfmt').value, mime=fmt==='jpeg'?'image/jpeg':fmt==='webp'?'image/webp':'image/png';
       const ext=fmt==='jpeg'?'jpg':fmt;
       const blob=await new Promise(r => cvs.toBlob(r, mime, 1.0)), buf=await blob.arrayBuffer();
-      u8=new Uint8Array(buf); name=(row._name||'reconstructed').replace(/\.(json|pxsn|gz)$/i,'')+'.'+ext;
+      u8=new Uint8Array(buf); name=(row._name||'decoded').replace(/\.(json|pxsn|gz)$/i,'')+'.'+ext;
     }
     files.push({name, u8});
   }

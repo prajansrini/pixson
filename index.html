@@ -54,6 +54,7 @@
         <div class="bulk-btns">
           <button class="btn btn-sm btn-primary" id="btnProcessAllEncode">Encode All</button>
           <button class="btn btn-sm btn-accent" id="btnDownloadAllEncode" disabled>Download All (ZIP)</button>
+          <button class="btn btn-sm btn-accent" id="btnBundleAllEncode" disabled>Bundle into 1 File</button>
           <button class="btn btn-sm btn-ghost" id="btnClearAllEncode">Clear All</button>
         </div>
       </div>
@@ -98,6 +99,18 @@
     <button class="image-modal-close">✕</button>
     <img id="imageModalImg" src="" alt="Preview">
   </div>
+
+  <div id="promptModal" class="custom-prompt-modal">
+    <div class="custom-prompt-box">
+      <h3 id="promptTitle">Enter password</h3>
+      <input type="password" id="promptInput" class="option-input" placeholder="Leave blank for no encryption...">
+      <div class="custom-prompt-actions">
+        <button class="btn btn-sm btn-ghost" id="promptCancel">Cancel</button>
+        <button class="btn btn-sm btn-primary" id="promptOk">Bundle</button>
+      </div>
+    </div>
+  </div>
+
   <script src="qrcode.js"></script>
   <script src="app.js"></script>
 </body>
