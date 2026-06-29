@@ -50,6 +50,188 @@
     });
   }
 
+  const filesBtn = $('#filesBtn');
+  if (filesBtn) {
+    filesBtn.onclick = () => {
+      const encRows = Array.from(document.querySelectorAll('#imageQueue .row-card'));
+      const decRows = Array.from(document.querySelectorAll('#jsonQueue .row-card'));
+      
+      if (encRows.length === 0 && decRows.length === 0) {
+        toast('No files uploaded yet', 'info');
+        return;
+      }
+      
+      const modal = document.createElement('div');
+      modal.className = 'modal active';
+      modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(5px);animation:fadeIn 0.2s ease';
+      
+      let encHtml = '';
+      let decHtml = '';
+      const getListHtml = (rows) => {
+        if (rows.length === 0) return '<p style="color:var(--text-3);font-size:0.9rem;text-align:center;padding:20px;">No files here</p>';
+        
+        let html = '';
+        let currentParent = null;
+        
+        rows.forEach(r => {
+          const name = r.querySelector('.row-name').textContent;
+          const isSelected = r.classList.contains('selected');
+          const isBatched = r.parentElement.classList.contains('master-items');
+          
+          if (r.parentElement !== currentParent) {
+            currentParent = r.parentElement;
+            if (isBatched) {
+              const master = currentParent.parentElement;
+              const masterHeader = (master.children[0] && master.children[0].children[0]) ? master.children[0].children[0] : null;
+              const batchName = masterHeader && masterHeader.childNodes.length > 0 ? masterHeader.childNodes[0].textContent.replace('📁', '').trim() : 'Batch';
+              html += `<div style="font-size:0.85rem; font-weight:600; color:var(--text-3); margin: 16px 0 8px 4px; display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18"/></svg>${batchName}</div>`;
+            } else {
+              html += `<div style="font-size:0.85rem; font-weight:600; color:var(--text-3); margin: 16px 0 8px 4px; display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>Individual Files</div>`;
+            }
+          }
+          
+          html += `
+            <label class="file-list-item ${isSelected ? 'active' : ''}" style="display:flex;align-items:center;padding:12px;background:var(--bg-input);border:1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};border-radius:8px;margin-bottom:8px;cursor:pointer;transition:all 0.2s;user-select:none;-webkit-user-select:none;">
+              <input type="checkbox" value="${r.id}" ${isSelected ? 'checked' : ''} style="display:none">
+              <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:0.95rem">${name}</span>
+            </label>
+          `;
+        });
+        return html;
+      };
+      
+      encHtml = getListHtml(encRows);
+      decHtml = getListHtml(decRows);
+      
+      const isDecodeActive = $('#panelJson2Img').classList.contains('active');
+      
+      modal.innerHTML = `
+        <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border);border-radius:16px;width:90%;max-width:500px;padding:24px;box-shadow:var(--shadow-lg);animation:modalIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)">
+          <h2 style="margin-top:0;font-size:1.3rem;font-weight:600;display:flex;align-items:center;gap:10px">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path d="M14 3v5h5M16 13H8M16 17H8M10 9H8"/></svg>
+            File Explorer
+          </h2>
+          <p style="color:var(--text-2);font-size:0.9rem;margin-bottom:15px">Select files to create a batch.</p>
+          
+          <div style="display:flex;gap:10px;margin-bottom:15px;border-bottom:1px solid var(--border);padding-bottom:10px;">
+            <button class="btn btn-sm ${!isDecodeActive ? 'btn-primary' : 'btn-ghost'} js-tab-enc" style="flex:1; justify-content: center;">Encode Queue</button>
+            <button class="btn btn-sm ${isDecodeActive ? 'btn-primary' : 'btn-ghost'} js-tab-dec" style="flex:1; justify-content: center; ${isDecodeActive ? 'background: var(--grad-primary-rev);' : ''}">Decode Queue</button>
+          </div>
+          
+          <div style="max-height:50vh;overflow-y:auto;padding-right:10px;margin-bottom:20px" class="custom-scroll js-tab-content-enc" ${isDecodeActive ? 'hidden' : ''}>
+            ${encHtml}
+          </div>
+          <div style="max-height:50vh;overflow-y:auto;padding-right:10px;margin-bottom:20px" class="custom-scroll js-tab-content-dec" ${!isDecodeActive ? 'hidden' : ''}>
+            ${decHtml}
+          </div>
+          
+          <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:15px">
+            <button class="btn btn-ghost js-close">Close</button>
+            <button class="btn btn-primary js-batch-sel" disabled>Create Batch</button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      const tabEnc = modal.querySelector('.js-tab-enc');
+      const tabDec = modal.querySelector('.js-tab-dec');
+      const contentEnc = modal.querySelector('.js-tab-content-enc');
+      const contentDec = modal.querySelector('.js-tab-content-dec');
+      
+      tabEnc.onclick = () => {
+        tabEnc.classList.replace('btn-ghost', 'btn-primary');
+        tabDec.classList.replace('btn-primary', 'btn-ghost');
+        tabDec.style.background = '';
+        contentEnc.hidden = false;
+        contentDec.hidden = true;
+      };
+      tabDec.onclick = () => {
+        tabDec.classList.replace('btn-ghost', 'btn-primary');
+        tabEnc.classList.replace('btn-primary', 'btn-ghost');
+        tabDec.style.background = 'var(--grad-primary-rev)';
+        contentDec.hidden = false;
+        contentEnc.hidden = true;
+      };
+      
+      const batchBtn = modal.querySelector('.js-batch-sel');
+      
+      const updateBtn = () => {
+        const checked = modal.querySelectorAll('input:checked').length;
+        batchBtn.disabled = checked < 2;
+        batchBtn.textContent = checked > 0 ? `Create Batch (${checked})` : 'Create Batch';
+      };
+      updateBtn();
+      
+      let lastCheckedExCb = null;
+      const allExCbs = Array.from(modal.querySelectorAll('input[type="checkbox"]'));
+      
+      allExCbs.forEach((cb, idx) => {
+        cb.addEventListener('click', (e) => {
+          const isShift = e.shiftKey;
+          const isCtrl = e.ctrlKey || e.metaKey || (e.pointerType === 'touch' || window.matchMedia('(pointer: coarse)').matches);
+          
+          if (isShift) window.getSelection().removeAllRanges();
+          
+          if (isShift && lastCheckedExCb) {
+            const start = allExCbs.indexOf(lastCheckedExCb);
+            const min = Math.min(start, idx), max = Math.max(start, idx);
+            if (!isCtrl) {
+              allExCbs.forEach(otherCb => {
+                if (otherCb.checked) { otherCb.checked = false; otherCb.dispatchEvent(new Event('change')); }
+              });
+            }
+            for (let i = min; i <= max; i++) {
+              allExCbs[i].checked = true;
+              allExCbs[i].dispatchEvent(new Event('change'));
+            }
+          } else if (!isCtrl) {
+            allExCbs.forEach(otherCb => {
+              if (otherCb !== cb && otherCb.checked) {
+                otherCb.checked = false;
+                otherCb.dispatchEvent(new Event('change'));
+              }
+            });
+            cb.checked = true;
+          }
+          lastCheckedExCb = cb;
+        });
+
+        cb.onchange = (e) => {
+          const label = e.target.closest('label');
+          label.classList.toggle('active', e.target.checked);
+          label.style.borderColor = e.target.checked ? 'var(--accent)' : 'var(--border)';
+          
+          const row = document.getElementById(e.target.value);
+          if (row) {
+            if (e.target.checked) row.classList.add('selected');
+            else row.classList.remove('selected');
+          }
+          updateSelectionMenu();
+          updateBtn();
+        };
+      });
+      
+      batchBtn.onclick = () => {
+        updateSelectionMenu();
+        const selMenuBtn = document.getElementById('btnCreateBatchFromSel');
+        if (selMenuBtn) selMenuBtn.click();
+        cleanupAndClose();
+      };
+      
+      const handleEsc = (e) => { if (e.key === 'Escape') cleanupAndClose(); };
+      document.addEventListener('keydown', handleEsc);
+      
+      const cleanupAndClose = () => {
+        document.removeEventListener('keydown', handleEsc);
+        modal.remove();
+      };
+      
+      modal.querySelector('.js-close').onclick = cleanupAndClose;
+      modal.onclick = (e) => { if (e.target === modal) cleanupAndClose(); };
+    };
+  }
+
   function customPrompt(title, btnText = 'OK', showInput = true) {
     return new Promise((resolve) => {
       const modal = document.getElementById('promptModal');
@@ -231,7 +413,7 @@
 
   // ─── Helpers ────────────────────────────────────────────────
   function fmtSz(b) { if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(1) + ' KB'; return (b / 1048576).toFixed(2) + ' MB'; }
-  const getTime = (ts) => new Date(ts || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const getTime = (ts) => { const d = new Date(ts || Date.now()); return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); };
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   function dlBlob(b, n) { const u = URL.createObjectURL(b), a = document.createElement('a'); a.href = u; a.download = n; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 5e3); }
   function c2h(c) { return c.toString(16).padStart(2, '0'); }
@@ -240,10 +422,19 @@
       try { await navigator.clipboard.writeText(text); return true; } catch (e) { console.warn(e); }
     }
     try {
-      const ta = document.createElement('textarea'); ta.value = text;
-      ta.style.position = 'fixed'; ta.style.opacity = '0';
-      document.body.appendChild(ta); ta.select();
-      const res = document.execCommand('copy'); ta.remove();
+      const ta = document.createElement('textarea'); 
+      ta.value = text;
+      ta.style.fontSize = '16px'; // Prevent iOS zoom
+      ta.style.position = 'fixed'; 
+      ta.style.top = '0';
+      ta.style.left = '0';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta); 
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const res = document.execCommand('copy'); 
+      ta.remove();
       if (!res) throw new Error('exec fails');
       return true;
     } catch (e) { console.warn(e); return false; }
@@ -265,7 +456,6 @@
         <button class="btn btn-sm btn-accent js-batch-bun">Bundle into 1 File...</button>
         <button class="btn btn-sm btn-ghost js-batch-clr">Clear</button>
       ` : `
-        <button class="btn btn-sm btn-primary js-batch-dec">Decode...</button>
         <button class="btn btn-sm btn-accent js-batch-dl">Download (ZIP)...</button>
         <button class="btn btn-sm btn-ghost js-batch-clr">Clear</button>
       `;
@@ -287,7 +477,6 @@
         master.querySelector('.js-batch-dl').onclick = () => openBatchModal('download', true, batchId);
         master.querySelector('.js-batch-bun').onclick = () => openBatchModal('bundle', true, batchId);
       } else {
-        master.querySelector('.js-batch-dec').onclick = () => openBatchModal('encode', false, batchId);
         master.querySelector('.js-batch-dl').onclick = () => openBatchModal('download', false, batchId);
       }
       master.querySelector('.js-batch-clr').onclick = () => openBatchModal('clear', isEncode, batchId);
@@ -298,6 +487,129 @@
   function rgbInt(r, g, b) { return (r << 16) | (g << 8) | b; }
   function showProgress(row) { const p = row.querySelector('.row-progress'); if (p) p.classList.add('active'); }
   function hideProgress(row) { const p = row.querySelector('.row-progress'); if (p) p.classList.remove('active'); }
+
+  let lastSelectedRow = null;
+  let selectionMenu = null;
+
+  function toggleRowSelection(row, e) {
+    const isShift = e.shiftKey;
+    const isTouch = e.pointerType === 'touch' || window.matchMedia('(pointer: coarse)').matches;
+    const isCtrl = e.ctrlKey || e.metaKey || isTouch;
+    if (isShift) window.getSelection().removeAllRanges();
+    
+    if (isShift && lastSelectedRow && lastSelectedRow.parentElement === row.parentElement) {
+      if (!isCtrl) {
+        document.querySelectorAll('.row-card.selected').forEach(r => r.classList.remove('selected'));
+        lastSelectedRow.classList.add('selected');
+      }
+      const rows = Array.from(row.parentElement.children).filter(el => el.classList.contains('row-card'));
+      const i1 = rows.indexOf(lastSelectedRow);
+      const i2 = rows.indexOf(row);
+      const start = Math.min(i1, i2);
+      const end = Math.max(i1, i2);
+      for (let i = start; i <= end; i++) {
+        rows[i].classList.add('selected');
+      }
+    } else if (isCtrl) {
+      row.classList.toggle('selected');
+      if (row.classList.contains('selected')) lastSelectedRow = row;
+    } else {
+      document.querySelectorAll('.row-card.selected').forEach(r => r.classList.remove('selected'));
+      row.classList.add('selected');
+      lastSelectedRow = row;
+    }
+    updateSelectionMenu();
+  }
+
+  document.addEventListener('click', e => {
+    if (e.target.closest('.row-card') || e.target.closest('.selection-menu')) return;
+    const selected = document.querySelectorAll('.row-card.selected');
+    if (selected.length > 0) {
+      selected.forEach(r => r.classList.remove('selected'));
+      updateSelectionMenu();
+      lastSelectedRow = null;
+    }
+  });
+
+  function updateSelectionMenu() {
+    const selected = Array.from(document.querySelectorAll('.row-card.selected'));
+    const encSel = selected.filter(r => r.closest('#imageQueue'));
+    const decSel = selected.filter(r => r.closest('#jsonQueue'));
+
+    if (encSel.length < 2 && decSel.length < 2) {
+      if (selectionMenu) selectionMenu.style.display = 'none';
+      return;
+    }
+
+    if (!selectionMenu) {
+      selectionMenu = document.createElement('div');
+      selectionMenu.className = 'selection-menu';
+      selectionMenu.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:var(--bg-card);border:1px solid var(--accent);border-radius:30px;padding:12px 24px;display:flex;align-items:center;gap:15px;box-shadow:0 10px 40px rgba(0,0,0,0.6);z-index:9999;backdrop-filter:blur(10px);animation:rowIn 0.3s ease;';
+      document.body.appendChild(selectionMenu);
+    }
+    
+    selectionMenu.style.display = 'flex';
+    selectionMenu.innerHTML = `
+      <span style="font-weight:600;color:var(--text-1);">${selected.length} Selected</span>
+      <button class="btn btn-sm btn-primary" id="btnCreateBatchFromSel">Create Batch</button>
+      <button class="btn btn-sm btn-ghost" id="btnClearSelection">Cancel</button>
+    `;
+
+    document.getElementById('btnClearSelection').onclick = () => {
+      document.querySelectorAll('.row-card.selected').forEach(r => r.classList.remove('selected'));
+      updateSelectionMenu();
+    };
+
+    document.getElementById('btnCreateBatchFromSel').onclick = () => {
+      const processQueue = (selArr, dbType, queueEl) => {
+        if (selArr.length < 2) return;
+        const newBatchId = Date.now() + Math.random().toString(36).substr(2, 5);
+        const masterItems = getMasterContainer(queueEl, newBatchId);
+        
+        for (const row of selArr) {
+          const rId = parseInt(row.id.split('-')[1]);
+          const isInBatch = row.parentElement.classList.contains('master-items');
+          let fileToUse = row._origFile || (row._obj ? row._obj.file : null);
+          
+          if (isInBatch && fileToUse) {
+            // Clone it if it's already in a batch
+            const clone = new File([fileToUse], fileToUse.name, { type: fileToUse.type });
+            try { clone._batchId = newBatchId; } catch(e){}
+            if (dbType === 'encodeFiles') {
+              const genericImages = new Set(['image/gif', 'image/svg+xml', 'image/bmp']);
+              if (clone.type.startsWith('image/') && !genericImages.has(clone.type)) addImg(clone);
+              else addGenericFile(clone);
+            } else {
+              addDataFile(clone);
+            }
+            row.classList.remove('selected');
+          } else {
+            // Move loose file directly
+            if (rId && db) {
+              const tx = db.transaction(dbType, 'readwrite');
+              const store = tx.objectStore(dbType);
+              const req = store.get(rId);
+              req.onsuccess = () => { if (req.result) { req.result.batchId = newBatchId; store.put(req.result); } };
+            }
+            if (fileToUse) { try { fileToUse._batchId = newBatchId; } catch(e){} }
+            masterItems.appendChild(row);
+            row.classList.remove('selected');
+          }
+        }
+      };
+
+      processQueue(encSel, 'encodeFiles', document.getElementById('imageQueue'));
+      processQueue(decSel, 'decodeFiles', document.getElementById('jsonQueue'));
+
+      updateSelectionMenu();
+      toast('Batch created!', 'success');
+      
+      document.querySelectorAll('.master-tile').forEach(m => {
+        const items = m.querySelector('.master-items');
+        if (items && items.children.length === 0) m.remove();
+      });
+    };
+  }
 
   // ─── Cryptography (AES-256-GCM) ─────────────────────────────
   async function deriveKey(password, salt) {
@@ -919,7 +1231,7 @@
       '<button class="btn btn-sm btn-outline-cyan js-cp-html" title="Copy <img> tag">HTML</button>' +
       '<button class="btn btn-sm btn-outline-cyan js-cp-css" title="Copy background-image">CSS</button>' +
       '<button class="btn btn-sm btn-outline-cyan js-qr-btn" title="Show QR Code" style="display:none">QR Code</button>' +
-      '<button class="btn btn-sm btn-ghost js-cp">Copy</button><button class="btn btn-sm btn-accent js-dl">Download</button></div></div>' +
+      '<button class="btn btn-sm btn-ghost js-cp">Copy</button><button class="btn btn-sm btn-accent js-dl">Download Text</button></div></div>' +
       '<pre class="json-preview js-jp"></pre>' +
       '<canvas class="qr-canvas js-qr" style="display:none; width:100%; max-width:300px; margin: 20px auto 10px; border-radius:8px;"></canvas>' +
       '</div>';
@@ -1036,6 +1348,12 @@
         dlBlob(origFile, row._fn); toast('Original file downloaded!', 'success');
       };
     }
+    
+    row.addEventListener('click', e => {
+      if (e.target.closest('button, input, select, label, canvas, a, .badge, pre')) return;
+      toggleRowSelection(row, e);
+    });
+    
     toast('Added: ' + file.name, 'success', 1800);
   }
 
@@ -1094,7 +1412,7 @@
       '<div class="row-result-header"><h4>Encoded Text Preview</h4><div class="card-actions">' +
       '<span class="badge badge-enc js-eb"></span><span class="badge badge-size js-js"></span>' +
       '<button class="btn btn-sm btn-outline-cyan js-qr-btn" title="Show QR Code" style="display:none">QR Code</button>' +
-      '<button class="btn btn-sm btn-ghost js-cp">Copy</button><button class="btn btn-sm btn-accent js-dl">Download</button></div></div>' +
+      '<button class="btn btn-sm btn-ghost js-cp">Copy</button><button class="btn btn-sm btn-accent js-dl">Download Text</button></div></div>' +
       '<pre class="json-preview js-jp"></pre>' +
       '<canvas class="qr-canvas js-qr" style="display:none; width:100%; max-width:300px; margin: 20px auto 10px; border-radius:8px;"></canvas>' +
       '</div>';
@@ -1162,6 +1480,12 @@
         dlBlob(origFile, row._fn); toast('Original file downloaded!', 'success');
       };
     }
+    
+    row.addEventListener('click', e => {
+      if (e.target.closest('button, input, select, label, canvas, a, .badge, pre')) return;
+      toggleRowSelection(row, e);
+    });
+
     toast('Added: ' + file.name, 'success', 1800);
   }
 
@@ -1424,6 +1748,15 @@
       const file = new File([u8], name, { type: 'application/octet-stream' });
       const result = await window.PXSN2.detectAndDecode(file);
       const sizeStr = fmtSz(sizeOverride || u8.length);
+      
+      let pastedPreview = '';
+      if (u8.length < 50000) {
+        pastedPreview = new TextDecoder().decode(u8);
+        if (pastedPreview.indexOf('\0') !== -1) pastedPreview = hexDump(u8);
+      } else {
+        pastedPreview = new TextDecoder().decode(u8.slice(0, 50000)) + '\n\n... [' + fmtSz(u8.length - 50000) + ' more]';
+        if (pastedPreview.indexOf('\0') !== -1) pastedPreview = hexDump(u8);
+      }
 
       const baseId = id || ++jsonCtr;
       let i = 0;
@@ -1431,9 +1764,9 @@
       for (const item of result.files) {
         const uniqueId = result.files.length > 1 ? `${baseId}_${i++}` : baseId;
         if (item._legacyImageJSON) {
-          makeDataRow(uniqueId, item._legacyImageJSON.filename || name, sizeStr, item._legacyImageJSON, item._legacyImageJSON.encoding || 'hex', uploadTime, bundleBatchId);
+          makeDataRow(uniqueId, item._legacyImageJSON.filename || name, sizeStr, item._legacyImageJSON, item._legacyImageJSON.encoding || 'hex', uploadTime, bundleBatchId, pastedPreview);
         } else if (item._legacyEncryptedJSON) {
-          makeEncryptedDecodeRow(uniqueId, item._legacyEncryptedJSON.originalName || name, sizeStr, item._legacyEncryptedJSON, uploadTime, bundleBatchId);
+          makeEncryptedDecodeRow(uniqueId, item._legacyEncryptedJSON.originalName || name, sizeStr, item._legacyEncryptedJSON, uploadTime, bundleBatchId, pastedPreview);
         } else {
           makeGenericDecodeRow(uniqueId, item.filename || name, sizeStr, {
             filename: item.filename,
@@ -1444,7 +1777,7 @@
             _isPreDecoded: true,
             blob: item.blob,
             url: item.url
-          }, uploadTime, bundleBatchId);
+          }, uploadTime, bundleBatchId, pastedPreview);
         }
       }
 
@@ -1489,7 +1822,7 @@
     await processDataBuffer(u8, name || 'pasted-data-' + id, id, null, Date.now());
   }
 
-  function makeDataRow(id, name, sizeStr, obj, encBadge, uploadTime, batchId) {
+  function makeDataRow(id, name, sizeStr, obj, encBadge, uploadTime, batchId, pastedPreview = '') {
     if (!obj.width || !obj.height) { toast(name + ': missing width/height', 'error'); return; }
     const row = document.createElement('div'); row.className = 'row-card'; row.id = 'jr-' + id;
     row.innerHTML =
@@ -1497,15 +1830,24 @@
       '<div class="row-thumb" id="jthumb-' + id + '"><canvas width="1" height="1"></canvas></div>' +
       '<div class="row-info"><div class="row-name" title="' + name + '">' + name + '</div>' +
       '<div class="row-meta"><span class="badge badge-dim">' + obj.width + ' × ' + obj.height + '</span><span class="badge badge-size">' + sizeStr + '</span><span class="badge badge-enc">' + encBadge + '</span><span style="color:var(--text-3);font-size:0.75rem;font-weight:500;margin-left:8px">' + getTime(batchId || uploadTime) + '</span></div></div>' +
-      '<div class="row-actions"><button class="btn btn-sm btn-primary js-recon">Decode</button>' +
-      '<select class="option-select js-outfmt"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp">WebP Lossless</option></select>' +
-      '<button class="btn btn-sm btn-outline-cyan js-dl-txt">Download Text</button>' +
-      '<button class="btn btn-sm btn-accent js-dli" disabled>Download File</button>' +
+      '<div class="row-actions"><button class="btn btn-sm btn-primary js-recon" style="display:none">Decode</button>' +
       '<button class="btn-remove js-rm">✕</button></div>' +
       '</div>' +
+      '<div class="row-result-header" style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px;">' +
+      '<h4>File Preview</h4>' +
+      '<div class="card-actions">' +
+      '<select class="option-select js-outfmt" style="padding: 2px 5px; font-size: 0.75rem;"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp">WebP</option></select>' +
+      '<button class="btn btn-sm btn-accent js-dli" disabled>Download File</button>' +
+      '</div></div>' +
       '<div class="row-progress"><div class="row-progress-bar"></div></div>' +
       '<div class="row-result" id="jres-' + id + '">' +
-      '<div class="row-preview-wrap checker"><canvas id="jcvs-' + id + '"></canvas></div>' +
+      '<div class="row-preview-wrap checker" style="border-top:none; margin-top: 10px; margin-bottom: 12px; text-align: center; overflow: hidden; background: var(--bg-input); border-radius: 6px;"><canvas id="jcvs-' + id + '"></canvas></div>' +
+      '</div>' +
+      '<div class="row-bot">' +
+      '<div class="row-result-header" style="border:none;padding-bottom:8px;margin-bottom:0"><h4>Encoded Text Preview</h4>' +
+      '<div class="card-actions"><span class="badge badge-enc">' + encBadge + '</span><span class="badge badge-size">' + sizeStr + '</span>' +
+      '<button class="btn btn-sm btn-ghost js-cp-txt">Copy</button><button class="btn btn-sm btn-accent js-dl-txt">Download Text</button></div></div>' +
+      '<div class="text-preview"><pre class="json-preview js-jp">' + pastedPreview.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + '</pre></div>' +
       '</div>';
 
     getMasterContainer(jsonQueue, batchId).prepend(row);
@@ -1533,16 +1875,22 @@
       const cvs = row.querySelector('#jcvs-' + id);
       cvs.toBlob(b => { if (b) { dlBlob(b, 'pixson-decoded.' + ext); toast('Downloaded File!', 'success'); } }, mime, 1.0); // 1.0 = Highest quality
     };
-    row.querySelector('.js-dl-txt').onclick = () => {
+    row.querySelectorAll('.js-dl-txt').forEach(btn => btn.onclick = () => {
       const jStr = JSON.stringify(row._obj, null, 2);
       dlBlob(new Blob([jStr], { type: 'application/json' }), (name || 'data') + '.json');
       toast('Downloaded Text payload!', 'success');
-    };
+    });
+    const cpBtn = row.querySelector('.js-cp-txt');
+    if (cpBtn) cpBtn.onclick = () => { navigator.clipboard.writeText(JSON.stringify(row._obj, null, 2)); toast('Copied to clipboard!', 'success'); };
     toast('Added: ' + name, 'success', 1800);
+    setTimeout(() => {
+      const reconBtn = row.querySelector('.js-recon');
+      if (reconBtn && !row._done) reconBtn.click();
+    }, 50);
   }
 
   // ─── Encrypted Decode Row ────────────────────────────────────
-  function makeEncryptedDecodeRow(id, name, sizeStr, obj, uploadTime, batchId) {
+  function makeEncryptedDecodeRow(id, name, sizeStr, obj, uploadTime, batchId, pastedPreview = '') {
     const row = document.createElement('div'); row.className = 'row-card'; row.id = 'jr-' + id;
     row.innerHTML =
       '<div class="row-top">' +
@@ -1555,10 +1903,22 @@
       '<div class="option-group" style="flex:1"><input type="password" class="option-input js-dec-pass" placeholder="Enter password to decrypt" style="width:100%"></div>' +
       '<button class="btn btn-sm btn-primary js-dec">Decrypt</button>' +
       '</div>' +
-      '<div class="row-progress"><div class="row-progress-bar"></div></div>';
+      '<div class="row-progress"><div class="row-progress-bar"></div></div>' +
+      '<div class="row-bot">' +
+      '<div class="row-result-header" style="border:none;padding-bottom:8px;margin-bottom:0"><h4>Encoded Text Preview</h4>' +
+      '<div class="card-actions"><span class="badge badge-enc">ENCRYPTED</span><span class="badge badge-size">' + sizeStr + '</span>' +
+      '<button class="btn btn-sm btn-ghost js-cp-txt">Copy</button><button class="btn btn-sm btn-accent js-dl-txt">Download Text</button></div></div>' +
+      '<div class="text-preview"><pre class="json-preview js-jp">' + pastedPreview.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + '</pre></div>' +
+      '</div>';
     getMasterContainer(jsonQueue, batchId).prepend(row);
     row._done = false; row._name = name;
     row.querySelector('.js-rm').onclick = () => { removeFileFromDB('decodeFiles', parseInt(id)); row.style.cssText = 'opacity:0;transform:translateY(-6px);transition:all .18s'; setTimeout(() => row.remove(), 180); };
+    
+    const cpBtn = row.querySelector('.js-cp-txt');
+    if (cpBtn) cpBtn.onclick = () => { navigator.clipboard.writeText(JSON.stringify(obj, null, 2)); toast('Copied to clipboard!', 'success'); };
+    const dlBtn = row.querySelector('.js-dl-txt');
+    if (dlBtn) dlBtn.onclick = () => { dlBlob(new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' }), (name || 'encrypted') + '.json'); toast('Downloaded Text payload!', 'success'); };
+
     const decBtn = row.querySelector('.js-dec');
     const passInput = row.querySelector('.js-dec-pass');
     passInput.onkeydown = (e) => { if (e.key === 'Enter') decBtn.click(); };
@@ -1582,7 +1942,7 @@
 
 
   // ─── Generic File Decode Row ─────────────────────────────────
-  function makeGenericDecodeRow(id, name, sizeStr, obj, uploadTime, batchId) {
+  function makeGenericDecodeRow(id, name, sizeStr, obj, uploadTime, batchId, pastedPreview = '') {
     const icon = getFileIcon(obj.filename || 'file');
     const row = document.createElement('div'); row.className = 'row-card'; row.id = 'jr-' + id;
     row.innerHTML =
@@ -1590,14 +1950,23 @@
       '<div class="row-thumb" style="display:flex;align-items:center;justify-content:center;font-size:2rem;background:var(--bg-input)">' + icon + '</div>' +
       '<div class="row-info"><div class="row-name" title="' + (obj.filename || name) + '">' + (obj.filename || name) + '</div>' +
       '<div class="row-meta"><span class="badge badge-enc">' + (obj.filename || '').split('.').pop().toUpperCase() + '</span><span class="badge badge-size">' + fmtSz(obj.originalSize || 0) + '</span><span class="badge badge-dim">Encoded: ' + sizeStr + '</span><span style="color:var(--text-3);font-size:0.75rem;font-weight:500;margin-left:8px">' + getTime(batchId || uploadTime) + '</span></div></div>' +
-      '<div class="row-actions"><button class="btn btn-sm btn-primary js-recon">Decode</button>' +
-      '<button class="btn btn-sm btn-outline-cyan js-dl-txt">Download Text</button>' +
-      '<button class="btn btn-sm btn-accent js-dli" disabled>Download File</button>' +
+      '<div class="row-actions"><button class="btn btn-sm btn-primary js-recon" style="display:none">Decode</button>' +
       '<button class="btn-remove js-rm">✕</button></div>' +
       '</div>' +
+      '<div class="row-result-header" style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px;">' +
+      '<h4>File Preview</h4>' +
+      '<div class="card-actions">' +
+      '<button class="btn btn-sm btn-accent js-dli" disabled>Download File</button>' +
+      '</div></div>' +
       '<div class="row-progress"><div class="row-progress-bar"></div></div>' +
       '<div class="row-result" id="gres-' + id + '">' +
-      '<div class="generic-preview-wrap" id="gprev-' + id + '"></div>' +
+      '<div class="generic-preview-wrap" id="gprev-' + id + '" style="border-top:none; margin-top: 10px; margin-bottom: 12px; text-align: center; overflow: hidden; background: var(--bg-input); border-radius: 6px;"></div>' +
+      '</div>' +
+      '<div class="row-bot">' +
+      '<div class="row-result-header" style="border:none;padding-bottom:8px;margin-bottom:0"><h4>Encoded Text Preview</h4>' +
+      '<div class="card-actions"><span class="badge badge-enc">' + (obj.encoding || 'Auto') + '</span><span class="badge badge-size">' + sizeStr + '</span>' +
+      '<button class="btn btn-sm btn-ghost js-cp-txt">Copy</button><button class="btn btn-sm btn-accent js-dl-txt">Download Text</button></div></div>' +
+      '<div class="text-preview"><pre class="json-preview js-jp">' + pastedPreview.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + '</pre></div>' +
       '</div>';
     getMasterContainer(jsonQueue, batchId).prepend(row);
     row._obj = obj; row._done = false; row._name = obj.filename || name;
@@ -1665,11 +2034,13 @@
       reconBtn.click();
     }
     row.querySelector('.js-dli').onclick = () => { if (!row._blob) return; dlBlob(row._blob, obj.filename || 'decoded-file'); toast('Downloaded File!', 'success'); };
-    row.querySelector('.js-dl-txt').onclick = () => {
+    row.querySelectorAll('.js-dl-txt').forEach(btn => btn.onclick = () => {
       const jStr = JSON.stringify(row._obj, null, 2);
       dlBlob(new Blob([jStr], { type: 'application/json' }), (name || 'data') + '.json');
       toast('Downloaded Text payload!', 'success');
-    };
+    });
+    const cpBtn = row.querySelector('.js-cp-txt');
+    if (cpBtn) cpBtn.onclick = () => { navigator.clipboard.writeText(JSON.stringify(row._obj, null, 2)); toast('Copied to clipboard!', 'success'); };
     toast('Added: ' + (obj.filename || name), 'success', 1800);
   }
 
@@ -1789,13 +2160,24 @@
 
   function createZip(files) {
     const enc = new TextEncoder(); let cdOffset = 0, centralDir = [], localFiles = [];
+    const nameCounts = {};
     for (const f of files) {
-      const nameBuf = enc.encode(f.name), u8 = f.u8, crc = getCrc(u8), size = u8.length;
+      let finalName = f.name || 'file';
+      if (nameCounts[finalName]) {
+        const parts = finalName.split('.');
+        const ext = parts.length > 1 ? '.' + parts.pop() : '';
+        const base = parts.length > 0 ? parts.join('.') : finalName;
+        finalName = base + '_' + nameCounts[f.name] + ext;
+        nameCounts[f.name]++;
+      } else {
+        nameCounts[finalName] = 1;
+      }
+      const nameBuf = enc.encode(finalName), u8 = f.u8, crc = getCrc(u8), size = u8.length;
       let lh = new Uint8Array(30 + nameBuf.length), ldv = new DataView(lh.buffer);
-      ldv.setUint32(0, 0x04034b50, true); ldv.setUint16(4, 10, true); ldv.setUint32(14, crc, true); ldv.setUint32(18, size, true); ldv.setUint32(22, size, true); ldv.setUint16(26, nameBuf.length, true); lh.set(nameBuf, 30);
+      ldv.setUint32(0, 0x04034b50, true); ldv.setUint16(4, 10, true); ldv.setUint16(6, 0x0800, true); ldv.setUint32(14, crc, true); ldv.setUint32(18, size, true); ldv.setUint32(22, size, true); ldv.setUint16(26, nameBuf.length, true); lh.set(nameBuf, 30);
 
       let cd = new Uint8Array(46 + nameBuf.length), cdv = new DataView(cd.buffer);
-      cdv.setUint32(0, 0x02014b50, true); cdv.setUint16(4, 20, true); cdv.setUint16(6, 10, true); cdv.setUint32(16, crc, true); cdv.setUint32(20, size, true); cdv.setUint32(24, size, true); cdv.setUint16(28, nameBuf.length, true); cdv.setUint32(42, cdOffset, true); cd.set(nameBuf, 46);
+      cdv.setUint32(0, 0x02014b50, true); cdv.setUint16(4, 20, true); cdv.setUint16(6, 10, true); cdv.setUint16(8, 0x0800, true); cdv.setUint32(16, crc, true); cdv.setUint32(20, size, true); cdv.setUint32(24, size, true); cdv.setUint16(28, nameBuf.length, true); cdv.setUint32(42, cdOffset, true); cd.set(nameBuf, 46);
 
       localFiles.push(lh, u8); centralDir.push(cd); cdOffset += lh.length + u8.length;
     }
@@ -1823,7 +2205,6 @@
     if (decRows.length > 0) {
       $('#bulkDecodeBar').style.display = 'flex';
       $('#btnDownloadAllDecode').disabled = false;
-      $('#btnProcessAllDecode').disabled = false;
     } else { $('#bulkDecodeBar').style.display = 'none'; }
   };
   const observer = new MutationObserver(updateBulkUI);
@@ -1874,7 +2255,7 @@
 
       const item = document.createElement('div');
       item.className = 'batch-item';
-      item.style.cssText = 'padding:10px;border-bottom:1px solid var(--border);';
+      item.style.cssText = 'padding:10px;border-bottom:1px solid var(--border);user-select:none;-webkit-user-select:none;';
       item.innerHTML = `
         <div style="display:flex;align-items:center;margin-bottom:8px;">
           <input type="checkbox" class="batch-file-cb" data-row-id="${row.id}" style="accent-color:var(--accent);margin-right:10px;" ${isSel ? 'checked' : ''}>
@@ -1882,13 +2263,13 @@
         </div>
         <div style="display:flex;align-items:center;flex-wrap:wrap;gap:15px;padding-left:28px;font-size:0.8rem;color:var(--text-2);">
           <div style="display:flex;align-items:center;">${metaHtml}</div>
-          ${(isEncode && currentBatchAction === 'download') ? `
+          ${(currentBatchAction === 'download') ? `
             <div style="display:flex;align-items:center;gap:15px;margin-left:auto;">
               <label style="display:flex;align-items:center;cursor:pointer;">
-                <input type="checkbox" class="batch-dl-orig-cb" data-row-id="${row.id}" style="accent-color:var(--accent);margin-right:4px;" ${isOrig && isSel ? 'checked' : ''} ${!isSel ? 'disabled' : ''}> Orig File
+                <input type="checkbox" class="batch-dl-orig-cb" data-row-id="${row.id}" style="accent-color:var(--accent);margin-right:4px;" ${isOrig && isSel ? 'checked' : ''} ${!isSel ? 'disabled' : ''}> ${isEncode ? 'Orig File' : 'Encoded Payload'}
               </label>
               <label style="display:flex;align-items:center;cursor:pointer;">
-                <input type="checkbox" class="batch-dl-enc-cb" data-row-id="${row.id}" style="accent-color:var(--accent);margin-right:4px;" ${isEnc && isSel ? 'checked' : ''} ${!isSel ? 'disabled' : ''}> Encoded Result
+                <input type="checkbox" class="batch-dl-enc-cb" data-row-id="${row.id}" style="accent-color:var(--accent);margin-right:4px;" ${isEnc && isSel ? 'checked' : ''} ${!isSel ? 'disabled' : ''}> ${isEncode ? 'Encoded Result' : 'Decoded File'}
               </label>
             </div>
           ` : ''}
@@ -1898,12 +2279,30 @@
     });
 
     let allChecked = true;
-    listEl.querySelectorAll('.batch-file-cb').forEach(cb => {
+    let lastCheckedCb = null;
+    const allCbs = Array.from(listEl.querySelectorAll('.batch-file-cb'));
+    
+    allCbs.forEach((cb, idx) => {
       const itemEl = cb.closest('.batch-item');
       if (!cb.checked) allChecked = false;
       const r = document.getElementById(cb.dataset.rowId);
       const origCb = itemEl.querySelector('.batch-dl-orig-cb');
       const encCb = itemEl.querySelector('.batch-dl-enc-cb');
+
+      cb.addEventListener('click', (e) => {
+        if (e.shiftKey) window.getSelection().removeAllRanges();
+        
+        if (e.shiftKey && lastCheckedCb) {
+          const start = allCbs.indexOf(lastCheckedCb);
+          const min = Math.min(start, idx), max = Math.max(start, idx);
+          for (let i = min; i <= max; i++) {
+            if (i === idx) continue;
+            allCbs[i].checked = cb.checked;
+            allCbs[i].dispatchEvent(new Event('change'));
+          }
+        }
+        lastCheckedCb = cb;
+      });
 
       cb.addEventListener('change', (e) => {
         const isChecked = e.target.checked;
@@ -1927,6 +2326,8 @@
       const mEnc = itemEl.querySelector('.batch-enc-sel');
       const rFmt = r.querySelector('.js-fmt');
       const rEnc = r.querySelector('.js-enc');
+
+      if (!mFmt || !mEnc || !rFmt || !rEnc) return;
 
       mFmt.value = rFmt.value;
       mEnc.value = rEnc.value;
@@ -1994,7 +2395,6 @@
   if (bundleBtn) bundleBtn.onclick = () => openBatchModal('bundle', true);
   $('#btnDownloadAllEncode').onclick = () => openBatchModal('download', true);
 
-  $('#btnProcessAllDecode').onclick = () => openBatchModal('encode', false);
   $('#btnDownloadAllDecode').onclick = () => openBatchModal('download', false);
 
   const bmp = $('#batchModalProceed');
@@ -2079,17 +2479,16 @@
 
           if (!files.length) { toast('No files selected for download.', 'warning'); btn.disabled = false; btn.textContent = origText; return; }
           btn.disabled = true; btn.textContent = 'Zipping...';
-          dlBlob(new Blob([createZip(files)], { type: 'application/zip' }), 'pixson_encoded.zip');
+          try {
+            dlBlob(new Blob([createZip(files)], { type: 'application/zip' }), 'pixson_encoded.zip');
+          } catch(e) { toast('Error zipping files: ' + e.message, 'error'); }
           btn.disabled = false; btn.textContent = origText;
         }
       } else {
         if (currentBatchAction === 'encode') {
-          const btn = $('#btnProcessAllDecode');
-          const origText = btn.textContent; btn.disabled = true; btn.textContent = 'Processing...';
           for (const row of rows) {
             if (!row._done) { const b = row.querySelector('.js-recon'); if (b) { b.click(); await sleep(100); while (!row._done && document.body.contains(row)) await sleep(100); } }
           }
-          btn.disabled = false; btn.textContent = origText;
         } else if (currentBatchAction === 'download') {
           const validRows = rows.filter(r => r._done || r._dlBlob || r._blob);
           if (!validRows.length) { toast('No files successfully decoded to download.', 'error'); return; }
@@ -2097,19 +2496,42 @@
           const origText = btn.textContent; btn.disabled = true; btn.textContent = 'Zipping...';
           const files = [];
           for (const row of validRows) {
-            let u8, name;
-            if (row._blob) { const buf = await row._blob.arrayBuffer(); u8 = new Uint8Array(buf); name = row._obj?.filename || 'decoded-file'; }
-            else if (row._dlBlob) { const buf = await row._dlBlob.arrayBuffer(); u8 = new Uint8Array(buf); name = row._obj?.filename || 'decoded-file'; }
+            const cbOrig = document.querySelector(`.batch-dl-orig-cb[data-row-id="${row.id}"]`);
+            const cbEnc = document.querySelector(`.batch-dl-enc-cb[data-row-id="${row.id}"]`);
+
+            let u8_dec, name_dec;
+            if (row._blob) { const buf = await row._blob.arrayBuffer(); u8_dec = new Uint8Array(buf); name_dec = row._obj?.filename || 'decoded-file'; }
+            else if (row._dlBlob) { const buf = await row._dlBlob.arrayBuffer(); u8_dec = new Uint8Array(buf); name_dec = row._obj?.filename || 'decoded-file'; }
             else {
-              const cvs = row.querySelector('canvas'); if (!cvs) continue;
-              const fmt = row.querySelector('.js-outfmt').value, mime = fmt === 'jpeg' ? 'image/jpeg' : fmt === 'webp' ? 'image/webp' : 'image/png';
-              const ext = fmt === 'jpeg' ? 'jpg' : fmt;
-              const blob = await new Promise(r => cvs.toBlob(r, mime, 1.0)), buf = await blob.arrayBuffer();
-              u8 = new Uint8Array(buf); name = (row._name || 'decoded').replace(/\.(json|pxsn|gz)$/i, '') + '.' + ext;
+              const cvs = row.querySelector('canvas'); 
+              if (cvs) {
+                const fmt = row.querySelector('.js-outfmt').value, mime = fmt === 'jpeg' ? 'image/jpeg' : fmt === 'webp' ? 'image/webp' : 'image/png';
+                const ext = fmt === 'jpeg' ? 'jpg' : fmt;
+                const blob = await new Promise(r => cvs.toBlob(r, mime, 1.0));
+                if (blob) {
+                  const buf = await blob.arrayBuffer();
+                  u8_dec = new Uint8Array(buf); name_dec = (row._name || 'decoded').replace(/\.(json|pxsn|gz)$/i, '') + '.' + ext;
+                }
+              }
             }
-            files.push({ name, u8 });
+
+            if (!cbOrig && !cbEnc) {
+              if (u8_dec) files.push({ name: name_dec, u8: u8_dec });
+            } else {
+              if (cbOrig && cbOrig.checked) {
+                const jStr = JSON.stringify(row._obj, null, 2);
+                const u8_orig = new TextEncoder().encode(jStr);
+                files.push({ name: 'payload_' + (row._name || 'data') + '.json', u8: u8_orig });
+              }
+              if (cbEnc && cbEnc.checked && u8_dec) {
+                files.push({ name: name_dec, u8: u8_dec });
+              }
+            }
           }
-          dlBlob(new Blob([createZip(files)], { type: 'application/zip' }), 'pixson_decoded.zip');
+          if (!files.length) { toast('No files to zip', 'error'); btn.disabled = false; btn.textContent = origText; return; }
+          try {
+            dlBlob(new Blob([createZip(files)], { type: 'application/zip' }), 'pixson_decoded.zip');
+          } catch(e) { toast('Error zipping files: ' + e.message, 'error'); }
           btn.disabled = false; btn.textContent = origText;
         }
       }
