@@ -5,6 +5,7 @@
 ![Client Side Only](https://img.shields.io/badge/backend-none-lightgrey)
 
 > A 100% client-side web application that converts **any file** — images, PDFs, audio, documents, spreadsheets — into compact, copy-pasteable text data and reconstructs them back perfectly. Features custom lossless image compression encodings, selective bulk bundling, AES-GCM encryption, QR Code generation, and IndexedDB session auto-saving. Zero external libraries. Zero server calls. Your files never leave your browser.
+Try it out (GitHub hosted link): [Pixson](https://prajansrini.github.io/pixson/)
 
 ![Pixson Demo](demo.gif)
 
