@@ -496,7 +496,7 @@ async function _encodeImage(file, mode) {
       payload = await gzipBytes(rgbaBytes);
       break;
     }
-    case "ultra": {
+    case "pixenultra": {
       encodingByte = ENC_IMAGE.ULTRA;
       payload = await window.pixenUltraEncode(rgba, width, height); // exposed from app.js
       break;
